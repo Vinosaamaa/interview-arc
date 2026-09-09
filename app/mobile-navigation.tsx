@@ -24,6 +24,10 @@ export function MobileNavIcon({ label }: { label: string }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={paths[label] ?? "M4 4h7l1 2 1-2h7v15h-7l-1 2-1-2H4z M12 6v15"} /></svg>;
 }
 
+function DestinationButton({ item, selected, onSelect }: { item: Destination; selected: string; onSelect?: () => void }) {
+  return <button type="button" aria-current={selected === item.id ? "page" : undefined} onClick={() => { onSelect?.(); item.select(); }}><MobileNavIcon label={item.label} /><span>{item.label}</span>{onSelect && <span aria-hidden="true">→</span>}</button>;
+}
+
 export default function MobileNavigation({ workspace, selected, items }: {
   workspace: string;
   selected: string;
@@ -35,12 +39,12 @@ export default function MobileNavigation({ workspace, selected, items }: {
   const secondary = items.slice(4);
   return <>
     <nav className="phone-navigation" aria-label={`${workspace} phone navigation`}>
-      {primary.map((item) => <button type="button" key={item.id} aria-current={selected === item.id ? "page" : undefined} onClick={item.select}><MobileNavIcon label={item.label} /><span>{item.label}</span></button>)}
+      {primary.map((item) => <DestinationButton key={item.id} item={item} selected={selected} />)}
       {secondary.length > 0 && <button type="button" aria-haspopup="dialog" aria-expanded={moreOpen} aria-current={secondary.some((item) => item.id === selected) ? "page" : undefined} onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setMoreOpen(true); }}><MobileNavIcon label="More" /><span>More</span></button>}
     </nav>
     <MobileSheet title={`${workspace} pages`} open={moreOpen} onClose={close}>
       <nav className="phone-more-destinations" aria-label={`More ${workspace} pages`}>
-        {secondary.map((item) => <button type="button" key={item.id} aria-current={selected === item.id ? "page" : undefined} onClick={() => { close(); item.select(); }}><MobileNavIcon label={item.label} /><span>{item.label}</span><span aria-hidden="true">→</span></button>)}
+        {secondary.map((item) => <DestinationButton key={item.id} item={item} selected={selected} onSelect={close} />)}
       </nav>
     </MobileSheet>
   </>;

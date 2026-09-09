@@ -20,11 +20,11 @@ export default function MobileRowActions({ title, children, primaryIndex = -1 }:
       {actions[primary]}
       <button type="button" className="phone-row-more" aria-label={`More actions for ${title}`} aria-haspopup="dialog" aria-expanded={open} onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setOpen(true); }}><MobileNavIcon label="More" /></button>
     </div>
-    <MobileSheet title={title} open={open} onClose={close}>
+    {open && <MobileSheet title={title} open onClose={close}>
       <div className="phone-secondary-actions" onClick={(event) => {
         const target = event.target instanceof Element ? event.target.closest("button:not(:disabled)") : null;
         if (target) close();
       }}>{actions.filter((_, index) => index !== primary)}</div>
-    </MobileSheet>
+    </MobileSheet>}
   </>;
 }

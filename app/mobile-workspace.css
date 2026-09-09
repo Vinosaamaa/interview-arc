@@ -281,7 +281,7 @@
   .app-shell .primary-bank-controls .bank-icon-tools { display: flex; flex-wrap: nowrap; flex: 0 0 auto; margin-left: 0; gap: 6px; }
   .app-shell .topic-ribbon-head > span { display: block; }
   .app-shell .problem-bank-list { padding: 0 4px; border: 0; gap: 0; }
-  .app-shell .problem-bank-entry { content-visibility: visible; contain-intrinsic-size: none; display: grid; grid-template-columns: 28px minmax(0, 1fr) 92px; grid-template-rows: auto; padding: 16px 0; gap: 9px; border: 0; border-bottom: 1px solid var(--phone-line); border-radius: 0; background: transparent; }
+  .app-shell .problem-bank-entry { content-visibility: auto; contain-intrinsic-size: auto 80px; display: grid; grid-template-columns: 28px minmax(0, 1fr) 92px; grid-template-rows: auto; padding: 16px 0; gap: 9px; border: 0; border-bottom: 1px solid var(--phone-line); border-radius: 0; background: transparent; }
   .app-shell .problem-bank-entry::before { display: none; }
   .app-shell .problem-bank-entry > .type-mark { grid-column: 1; grid-row: 1; width: 28px; height: 32px; border-radius: 8px; align-self: center; }
   .app-shell .problem-bank-copy { min-width: 0; grid-column: 2; grid-row: 1; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
@@ -320,14 +320,18 @@
 
   /* The document uses one gutter, independent of how many content layers exist. */
   .app-shell .workspace-reader-scroll.case-document {
-    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    --reader-gutter-left: max(18px, env(safe-area-inset-left));
+    --reader-gutter-right: max(18px, env(safe-area-inset-right));
     min-width: 0;
-    overscroll-behavior-y: contain; padding: 20px 18px 48px !important; background: var(--phone-paper); }
+    overscroll-behavior-y: contain;
+    padding: 20px var(--reader-gutter-right) max(48px, env(safe-area-inset-bottom)) var(--reader-gutter-left) !important;
+    background: var(--phone-paper);
+  }
   .app-shell .workspace-reader-scroll .markdown-body { font-size: 17px; line-height: 1.75; }
   .app-shell .workspace-reader-scroll :is(.reader-group, .reader-group > div, .reader-subsection, .case-transcript, .transcript-thread) { padding-inline: 0 !important; border-inline: 0; }
   .app-shell .workspace-reader-scroll .case-document-head { padding-inline: 0; }
   .app-shell .workspace-reader-scroll :is(h1, .case-title), .app-shell .workspace-reader-scroll .case-title-row h2 { font-size: 29px; line-height: 1.2; }
-  .app-shell .workspace-reader-scroll .code-stage { margin-inline: -18px; width: calc(100% + 36px); max-width: calc(100% + 36px); border-radius: 0; }
+  .app-shell .workspace-reader-scroll .code-stage { margin-inline: calc(-1 * var(--reader-gutter-left)) calc(-1 * var(--reader-gutter-right)); width: calc(100% + var(--reader-gutter-left) + var(--reader-gutter-right)); max-width: calc(100% + var(--reader-gutter-left) + var(--reader-gutter-right)); border-radius: 0; }
   .app-shell .workspace-reader-scroll .code-stage > pre { font-size: 15px; line-height: 1.65; padding: 14px; }
   .app-shell .engineering-destination .engineering-workspace { border: 0; border-radius: 0; box-shadow: none; background: var(--phone-paper); }
   .app-shell .engineering-destination .engineering-record-panel { border: 0; border-radius: 0; }
