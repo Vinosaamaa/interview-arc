@@ -6,9 +6,10 @@ test("four isolated Workers can enter and the next waits for a released slot", {
   const releases = [];
   let fifth;
   try {
-    for (let i = 0; i < 4; i++) releases.push(await acquireMcpIntegrationLock());
+    // Exercise a separate slot range so this oracle never consumes Worker slots.
+    for (let i = 0; i < 4; i++) releases.push(await acquireMcpIntegrationLock(41735));
     let entered = false;
-    fifth = acquireMcpIntegrationLock().then((release) => { entered = true; return release; });
+    fifth = acquireMcpIntegrationLock(41735).then((release) => { entered = true; return release; });
     await new Promise((resolve) => setTimeout(resolve, 150));
     assert.equal(entered, false);
     await releases.pop()();

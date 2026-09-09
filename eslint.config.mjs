@@ -7,6 +7,10 @@ const eslintConfig = defineConfig([
   ...nextTs,
   // Override default ignores of eslint-config-next.
   globalIgnores([
+    // Generated Worker output, caches, and vendored agent tooling are not app sources.
+    ".wrangler/**",
+    ".cache/**",
+    ".agents/skills/impeccable/**",
     // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",

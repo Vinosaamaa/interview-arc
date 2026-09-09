@@ -6,7 +6,7 @@ const MCP_INTEGRATION_SLOTS = 4;
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
-export async function acquireMcpIntegrationLock() {
+export async function acquireMcpIntegrationLock(basePort = MCP_INTEGRATION_LOCK_PORT) {
   for (let attempt = 0; attempt < 1_800; attempt += 1) {
     for (let slot = 0; slot < MCP_INTEGRATION_SLOTS; slot += 1) {
       const server = createServer();
@@ -17,7 +17,7 @@ export async function acquireMcpIntegrationLock() {
         });
         server.listen({
           host: MCP_INTEGRATION_LOCK_HOST,
-          port: MCP_INTEGRATION_LOCK_PORT + slot,
+          port: basePort + slot,
           exclusive: true,
         }, () => resolve(true));
       });
