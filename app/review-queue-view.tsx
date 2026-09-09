@@ -14,6 +14,7 @@ import {
   type ReviewQueueUiState,
 } from "./review-queue-state";
 import InterviewPageHero from "./interview-page-hero";
+import MobileRowActions from "./mobile-row-actions";
 
 type ReviewQueueViewProps = {
   items: ReviewQueueItem[];
@@ -219,12 +220,14 @@ export default function ReviewQueueView({
                 return <article className={`review-row ${item.specialty} ${selected ? "selected" : ""}`} key={item.reviewKey}>
                   <button type="button" className="review-select" aria-pressed={selected} aria-label={`${selected ? "Remove" : "Select"} ${item.title}`} onClick={() => toggleSelection(item.reviewKey)}><span aria-hidden="true">{selected ? "✓" : specialtyInitial}</span></button>
                   <span className="review-select-slot" aria-hidden="true" />
-                  <div className="review-row-copy review-row-static"><small>{specialtyLabel(item.specialty)} · {horizon.label}</small><strong>{item.title}</strong><p>{item.reasonLabel}</p></div>
+                  <div className="review-row-copy review-row-static"><small>{specialtyLabel(item.specialty)} · {horizon.label}</small><strong>{item.title}</strong><button type="button" className="phone-review-open" onClick={() => onOpenAttempt(item)} aria-label={`Read previous attempt for ${item.title}`}>{item.title}</button><p>{item.reasonLabel}</p></div>
                   <div className="review-row-meta review-row-static"><span className={`review-outcome-chip ${item.previousResult}`}>{resultLabel(item.previousResult)}</span><span>Due {compactDate(item.dueDate)}</span><span>{item.estimatedMinutes} min</span></div>
                   <div className="review-actions review-icon-actions">
+                    <MobileRowActions title={item.title} primaryIndex={0}>
                     <button type="button" className="review-add" title={pending ? "Adding to Today" : blocked ? "Already on Today" : "Add to Today"} aria-label={pending ? `Adding ${item.title} to Today` : blocked ? `${item.title} is already on Today` : `Add ${item.title} to Today`} disabled={!canAddToToday || blocked || pending} onClick={() => onAddToToday([item])}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></button>
                     <button type="button" title="Open previous attempt" aria-label={`Open previous attempt for ${item.title}`} onClick={(event) => { event.stopPropagation(); onOpenAttempt(item); }}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4h9l3 3v13H6z" /><path d="M15 4v4h4M9 12h6M9 16h6" /></svg></button>
                     <button type="button" title="Review next week" aria-label={`Defer ${item.title} until next week`} disabled={pending} onClick={() => onDefer(item)}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 9h16M5 5h14v15H5z" /><path d="m10 14 2 2 4-4" /></svg></button>
+                    </MobileRowActions>
                   </div>
                 </article>;
               })}</div>
