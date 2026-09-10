@@ -3,6 +3,13 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { findExactPastSnapshot, orderPastReaderSections, retainLoadedPastSnapshot } from "../app/behavioral-final-answer-view.ts";
 
+test("same-record refresh reveals newly published additions without regressing loaded revisions", () => {
+  const absent = { id: "attempt", drawingAddition: null, editorialAddition: null };
+  const present = { id: "attempt", drawingAddition: { revision: 2 }, editorialAddition: { revision: 3 } };
+  assert.deepEqual(retainLoadedPastSnapshot(absent, present), present);
+  assert.deepEqual(retainLoadedPastSnapshot(present, { ...absent, drawingAddition: { revision: 1 } }), present);
+});
+
 test("reselecting the same Past item keeps its loaded conversation evidence", () => {
   const loaded = {
     id: "attempt-1",

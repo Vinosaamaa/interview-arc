@@ -68,5 +68,13 @@ function loadedPastSnapshotFields(snapshot: LoadedPastSnapshotFields): LoadedPas
 
 export function retainLoadedPastSnapshot<T extends { id: string } & LoadedPastSnapshotFields>(current: T | null, next: T) {
   if (!current || current.id !== next.id) return next;
-  return { ...current, ...next, ...loadedPastSnapshotFields(current) };
+  const retained = { ...current, ...next, ...loadedPastSnapshotFields(current) };
+  // List projections omit unloaded detail. An actual newer addition must still
+  // replace a previously loaded absence without regressing a newer revision.
+  for (const key of ["drawingAddition", "editorialAddition"] as const) {
+    const incoming = next[key] as { revision?: number } | null | undefined;
+    const loaded = current[key] as { revision?: number } | null | undefined;
+    if (incoming && (!loaded || (incoming.revision ?? 0) >= (loaded.revision ?? 0))) retained[key] = next[key];
+  }
+  return retained;
 }
