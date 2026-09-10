@@ -25,7 +25,7 @@ supersedes: []
 learningRefs: []
 diagrams: []
 sources: [{"label":"Issue #453","url":"https://github.com/Vinosaamaa/interview-arc/issues/453","kind":"issue"}]
-verification: {"state":"verified","evidenceRefs":["tests/practice-solution-publication.test.mjs","tests/chatgpt-import-store.test.mjs"]}
+verification: {"state":"verified","evidenceRefs":["tests/practice-solution-publication.test.mjs","tests/chatgpt-practice-import.test.mjs"]}
 visibility: public-safe
 publicationEligibility: eligible
 issue: 453

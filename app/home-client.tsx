@@ -370,6 +370,7 @@ type LogEntry = {
   practiceRecord?: PracticeRecordWriteReceipt | null;
   drawingAddition?: import("../db/practice-drawing").PracticeDrawing | null;
   editorialAddition?: import("../db/practice-editorial").PracticeEditorial | null;
+  solutionPublication?: import("../db/practice-solution-publication").PracticeSolutionPublication | null;
   practiceAssets?: Array<{
     assetId: string;
     revision: number;
@@ -1326,14 +1327,16 @@ function PracticeRecordProblem({ record }: { record: PracticeRecordWriteReceipt 
   return <section className="practice-record-section" id="case-problem"><h3>Problem</h3><h4>{record.payload.prompt.title}</h4><MarkdownBody source={record.payload.prompt.body} />{record.payload.prompt.canonicalUrl && <a href={record.payload.prompt.canonicalUrl} target="_blank" rel="noreferrer">Open canonical problem ↗</a>}</section>;
 }
 
-function PracticeRecordSummary({ record }: { record: PracticeRecordWriteReceipt }) {
-  return <section className="practice-record-section" id="case-attempt-summary"><h3>Attempt Summary</h3><MarkdownBody source={record.payload.summary} />{record.payload.referencePending && <aside aria-label="Reference pending"><h4>Practice saved · reference pending</h4><p>{record.payload.referencePending.reason}</p><p>Editorials and drawings added later appear below. The original practice record remains unchanged.</p></aside>}</section>;
+function PracticeRecordSummary({ record, solutionPublished = false }: { record: PracticeRecordWriteReceipt; solutionPublished?: boolean }) {
+  return <section className="practice-record-section" id="case-attempt-summary"><h3>Attempt Summary</h3><MarkdownBody source={record.payload.summary} />{record.payload.referencePending && <aside aria-label="Reference status at completion"><h4>{solutionPublished ? "Reference was pending at completion" : "Practice saved · reference pending"}</h4><p>{record.payload.referencePending.reason}</p><p>Solutions, editorials and drawings added later appear below. The original practice record remains unchanged.</p></aside>}</section>;
 }
 
-function PracticeRecordAdditions({ entry }: { entry: LogEntry }) {
+function PracticeRecordAdditions({ entry, onOpenSolution }: { entry: LogEntry; onOpenSolution: () => void }) {
   const drawing = entry.drawingAddition;
   const editorial = entry.editorialAddition;
-  return <>{drawing && <section className="practice-record-section" aria-label="Saved drawing"><h3>Saved drawing</h3><p>{drawing.authorship === "owner" ? "Your drawing" : "AI-generated reference"} · Revision {drawing.revision}</p><p><a href={drawing.url} target="_blank" rel="noreferrer">Open diagram in Excalidraw ↗</a> · <a href={drawing.downloadUrl}>Download editable drawing</a></p><p>Saved snapshot; later canvas edits require another export.</p></section>}{editorial && <section className="practice-record-section" aria-label="Editorial added after practice"><h3>Editorial added after practice</h3><p><a href={editorial.editorialUrl} target="_blank" rel="noreferrer">Official editorial ↗</a> · Addition revision {editorial.revision}</p><MarkdownBody source={editorial.explanation} /></section>}</>;
+  const solution = entry.solutionPublication;
+  const publication = solution && <section className="practice-record-section" aria-label="Solution added after practice"><h3>Solution added after practice</h3><p>Solution revision {solution.solutionRevision} was {solution.action} after this practice was saved.</p><button className="solution-link-button" onClick={onOpenSolution}>Open latest solution</button></section>;
+  return <>{publication}{drawing && <section className="practice-record-section" aria-label="Saved drawing"><h3>Saved drawing</h3><p>{drawing.authorship === "owner" ? "Your drawing" : "AI-generated reference"} · Revision {drawing.revision}</p><p><a href={drawing.url} target="_blank" rel="noreferrer">Open diagram in Excalidraw ↗</a> · <a href={drawing.downloadUrl}>Download editable drawing</a></p><p>Saved snapshot; later canvas edits require another export.</p></section>}{editorial && <section className="practice-record-section" aria-label="Editorial added after practice"><h3>Editorial added after practice</h3><p><a href={editorial.editorialUrl} target="_blank" rel="noreferrer">Official editorial ↗</a> · Addition revision {editorial.revision}</p><MarkdownBody source={editorial.explanation} /></section>}</>;
 }
 
 function PracticeRecordReview({ record }: { record: PracticeRecordWriteReceipt }) {
@@ -5813,7 +5816,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
           { value: "Pacific", label: "record" },
         ]} />
         {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That practice record is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
-        <ChatgptPractice MarkdownBody={ImportedMarkdownBody} />
+        <ChatgptPractice MarkdownBody={ImportedMarkdownBody} refreshKey={draft.solutionProfiles} />
         <div className={`past-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${selectedEntry ? "reader-workspace" : ""} ${nestedReaderFocus ? "nested-reader-focus" : ""} ${readerClosing ? "reader-closing" : ""}`}>
           <div
             className="past-master-pane"
@@ -6739,6 +6742,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
         practiceRecord: PracticeRecordWriteReceipt | null;
         drawingAddition: LogEntry["drawingAddition"];
         editorialAddition: LogEntry["editorialAddition"];
+        solutionPublication: LogEntry["solutionPublication"];
         practiceAssets: NonNullable<LogEntry["practiceAssets"]>;
       }> : null)
       .then((record) => {
@@ -6748,7 +6752,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
           codeAttempts: record.codeAttempts.length,
         });
         const enrich = (current: LogEntry | null) => current && (current.artifact?.activityId || current.id) === selectedEntryActivityId
-          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses, codeAttempts: record.codeAttempts, finalAnswer: record.finalAnswer, practiceScenarios: record.practiceScenarios, behavioralAnalysis: record.behavioralAnalysis, resumeContext: record.resumeContext, interactionModeClassification: record.interactionModeClassification, interactionModeTransitions: record.interactionModeTransitions, practiceRecord: record.practiceRecord, practiceAssets: record.practiceAssets, drawingAddition: record.drawingAddition, editorialAddition: record.editorialAddition }
+          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses, codeAttempts: record.codeAttempts, finalAnswer: record.finalAnswer, practiceScenarios: record.practiceScenarios, behavioralAnalysis: record.behavioralAnalysis, resumeContext: record.resumeContext, interactionModeClassification: record.interactionModeClassification, interactionModeTransitions: record.interactionModeTransitions, practiceRecord: record.practiceRecord, practiceAssets: record.practiceAssets, drawingAddition: record.drawingAddition, editorialAddition: record.editorialAddition, solutionPublication: record.solutionPublication }
           : current;
         if (view === "banks") setBankNestedEntry(enrich);
         else if (view === "journey") setJourneyNestedEntry(enrich);
@@ -6764,7 +6768,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
         }
       });
     return () => controller.abort();
-  }, [selectedEntryActivityId, view]);
+  }, [selectedEntryActivityId, view, draft.solutionProfiles]);
 
   function setEveryReaderGroup(open: boolean) {
     if (!readerMemoryKey) return;
@@ -7023,12 +7027,12 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     const solutionAvailable = Boolean(solutionQuestion && hasSolutionProfile(selectedEntry.type, solutionQuestion) && solutionRevision);
     const immutableSections = selectedEntryPracticeRecord ? selectedEntryPracticeRecordSections.map((section) => {
       if (section === "problem") return <PracticeRecordProblem record={selectedEntryPracticeRecord} key={section} />;
-      if (section === "attempt_summary") return <PracticeRecordSummary record={selectedEntryPracticeRecord} key={section} />;
+      if (section === "attempt_summary") return <PracticeRecordSummary record={selectedEntryPracticeRecord} solutionPublished={Boolean(selectedEntry.solutionPublication)} key={section} />;
       if (section === "conversation") return <details className="reader-group conversation-group" id="case-transcript" open={readerGroupOpen("case-transcript", true)} onToggle={(event) => rememberReaderGroup("case-transcript", event.currentTarget.open)} key={section}><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings and coaching inline</small></summary><div id="case-transcript-thread">{selectedEntryTurns.length ? <ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} codeAttempts={selectedEntryCodeAttempts} modeTransitions={selectedEntryModeTransitions} renderCodeAttempts={false} /> : <p className="practice-record-integrity-error" role="alert">This immutable record references {selectedEntryPracticeRecord.payload.transcript.turnCount} transcript turns, but none were returned. Reload the record before relying on it.</p>}</div></details>;
       if (section === "code_attempts") return <details className="reader-group code-attempts-group" id="case-code-attempts" open={readerGroupOpen("case-code-attempts", true)} onToggle={(event) => rememberReaderGroup("case-code-attempts", event.currentTarget.open)} key={section}><summary><span>Code Attempts</span><small>{selectedEntryCodeAttempts.length} exact owner submission{selectedEntryCodeAttempts.length === 1 ? "" : "s"}</small></summary><div>{selectedEntryCodeAttempts.length ? selectedEntryCodeAttempts.map((attempt) => <article className="code-attempt-card" key={attempt.id}><header><strong>Code Attempt {attempt.sequence} · {attempt.language}</strong><span>{attempt.lineCount} lines</span></header><CodeAttemptBody attempt={attempt} /></article>) : <p className="practice-record-integrity-error" role="alert">No authoritative owner code submission is linked to this attempt. The reader will not substitute reference code.</p>}</div></details>;
       if (section === "final_answer") return <details className="reader-group final-answer-group" id="case-final-answer" open={readerGroupOpen("case-final-answer", true)} onToggle={(event) => rememberReaderGroup("case-final-answer", event.currentTarget.open)} key={section}><summary><span>Final Tailored Answer</span><small>Exact completion snapshot</small></summary><div><PracticeRecordResponseStages stages={selectedEntryPracticeRecord.payload.specialtyOutput.responseStages} />{selectedEntryFinalAnswer ? <FinalAnswerCard finalAnswer={selectedEntryFinalAnswer} /> : <p className="practice-record-integrity-error" role="alert">The immutable record references a final answer that is not available. Reload the record before relying on it.</p>}</div></details>;
       if (section === "your_design") return <details className="reader-group your-design-group" id="case-your-design" open={readerGroupOpen("case-your-design", true)} onToggle={(event) => rememberReaderGroup("case-your-design", event.currentTarget.open)} key={section}><summary><span>Your Design</span><small>Owner decisions and original drawing</small></summary><div><PracticeRecordResponseStages stages={selectedEntryPracticeRecord.payload.specialtyOutput.responseStages} /><PracticeRecordAssets assets={selectedEntryPracticeAssets} /></div></details>;
-      if (section === "activity_review") return <Fragment key={section}><PracticeRecordReview record={selectedEntryPracticeRecord} /><PracticeRecordAdditions entry={selectedEntry} /></Fragment>;
+      if (section === "activity_review") return <PracticeRecordReview record={selectedEntryPracticeRecord} key={section} />;
       return <PracticeRecordTechnicalAudit record={selectedEntryPracticeRecord} key={section} />;
     }) : null;
     return (
@@ -7058,6 +7062,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
               reviewSections: selectedEntry.artifact ? selectedCaseGroups.filter((group) => group.key !== "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className={`reader-group ${group.key}-group`} id={groupId} open={readerGroupOpen(groupId, group.key !== "conversation")} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>; }) : [],
             })}</>)}
           </div>
+          <PracticeRecordAdditions entry={selectedEntry} onOpenSolution={() => openEntrySolution(selectedEntry)} />
           <footer>Interview Arc · {selectedEntry.id}</footer>
         </div>
         {renderAnnotationPopover()}

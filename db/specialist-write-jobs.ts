@@ -13,7 +13,9 @@ export type SpecialistWriteOperation =
   | "personal_bank_question"
   | "behavioral_evidence_item"
   | "behavioral_claim_status"
-  | "specialist_finalization";
+  | "specialist_finalization"
+  | "practice_solution_batch"
+  | "practice_solution_publication";
 
 export type SpecialistWriteStatus = SpecialistWriteJobRow["status"];
 

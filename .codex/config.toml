@@ -111,6 +111,8 @@ enabled_tools = [
   "save_practice_drawing",
   "get_practice_drawing",
   "get_practice_coaching_guide",
+  "publish_practice_solutions",
+  "get_practice_solution_batch",
 ]
 startup_timeout_sec = 15.0
 tool_timeout_sec = 60.0

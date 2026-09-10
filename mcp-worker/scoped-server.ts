@@ -11,6 +11,7 @@ export const CHATGPT_PRACTICE_TOOLS = new Set([
   "get_leetcode_connection", "get_leetcode_problem", "get_leetcode_recent_submissions", "get_leetcode_submission", "get_leetcode_editorial",
   "save_practice_drawing", "get_practice_drawing",
   "backfill_practice_editorial", "get_practice_editorial",
+  "publish_practice_solutions", "get_practice_solution_batch",
   "upsert_behavioral_evidence_item", "query_behavioral_evidence_candidates", "review_behavioral_evidence_candidates", "set_behavioral_claim_status",
   "search", "fetch", "create_practice_question", "preview_practice_backfill", "apply_practice_backfill", "get_practice_backfill_receipt",
   "get_practice_interaction_mode", "set_practice_interaction_mode", "save_practice_exchange",

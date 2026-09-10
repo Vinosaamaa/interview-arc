@@ -4,10 +4,11 @@ import test from "node:test";
 import { findExactPastSnapshot, orderPastReaderSections, retainLoadedPastSnapshot } from "../app/behavioral-final-answer-view.ts";
 
 test("same-record refresh reveals newly published additions without regressing loaded revisions", () => {
-  const absent = { id: "attempt", drawingAddition: null, editorialAddition: null };
-  const present = { id: "attempt", drawingAddition: { revision: 2 }, editorialAddition: { revision: 3 } };
+  const absent = { id: "attempt", drawingAddition: null, editorialAddition: null, solutionPublication: null };
+  const present = { id: "attempt", drawingAddition: { revision: 2 }, editorialAddition: { revision: 3 }, solutionPublication: { revision: 2 } };
   assert.deepEqual(retainLoadedPastSnapshot(absent, present), present);
   assert.deepEqual(retainLoadedPastSnapshot(present, { ...absent, drawingAddition: { revision: 1 } }), present);
+  assert.deepEqual(retainLoadedPastSnapshot(present, { ...absent, solutionPublication: { revision: 1 } }), present);
 });
 
 test("reselecting the same Past item keeps its loaded conversation evidence", () => {
@@ -38,6 +39,7 @@ test("practice-record API returns the immutable snapshot projection and export f
     "finalization: record.finalization",
     "drawingAddition: record.drawingAddition",
     "editorialAddition: record.editorialAddition",
+    "solutionPublication: record.solutionPublication",
     "finalAnswer: record.finalAnswer",
     "finalAnswerMarkdown: record.finalAnswerMarkdown",
     "finalAnswerHtml: record.finalAnswerHtml",
