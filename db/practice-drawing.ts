@@ -23,6 +23,8 @@ export async function savePracticeDrawing(db:Database,bucket:Bucket,owner:string
   const prior=await replay();if(prior)return prior;
   const eligible="owner_id=? AND activity_id=? AND specialty='system_design' AND status='completed'";
   if(!await db.prepare(`SELECT activity_id FROM ${completedPracticeTargets} WHERE ${eligible}`).bind(owner,input.activityId).first())throw new Error("Save the completed system-design Practice Record before attaching its drawing.");
+  const latest=await readPracticeDrawing(db,owner,input.activityId);
+  if((latest?.revision??0)!==input.expectedRevision)throw new Error("Drawing revision changed. Read the latest drawing before saving; nothing was uploaded.");
   const snapshot=await readExcalidrawLink({url:input.url},fetcher,true);if(!snapshot.sourceScene)throw new Error("Snapshot source unavailable.");
   const bytes=new TextEncoder().encode(snapshot.sourceScene);const sha256=Buffer.from(await crypto.subtle.digest("SHA-256",bytes)).toString("hex");
   const objectKey=`private-practice-drawings/${await importFingerprint(owner)}/${await importFingerprint(input.activityId)}/${sha256}.excalidraw`;

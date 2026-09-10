@@ -222,6 +222,8 @@ For behavioral finalization, prepare the fields together before submitting:
 - Include detailed profile sections: Interview Signal; Truthful Situation;
   Truthful Task; Truthful Actions and Ownership; Verified Result and Gaps;
   Learning; Likely Follow-ups and Evidence Gaps; Reference Answer Patterns.
+  Also provide the interview-ready preferred answer with evidence or explicit
+  gaps in `behavioralAnswer`, and record actual consulted sources in references.
   Include the required Q&A disposition and exact saved-turn provenance.
 
 Do not carry a running backend timer into an unobservable Voice pause and

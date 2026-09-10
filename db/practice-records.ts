@@ -7,6 +7,8 @@ import { readD1RowsInBatches } from "./d1-read-batching";
 import {
   activityFinalizations,
   activitySolutionLinks,
+  problemSolutionProfiles,
+  contentBank,
   behavioralFinalAnswerSnapshots,
   extraActivities,
   leetcodeCodeAttempts,
@@ -549,11 +551,22 @@ export async function persistFinalizedPracticeRecord(input: {
           AND ${practiceAssetSetOperations.status} = 'staged'
       )`
     : sql`1 = 1`;
+  const deferredReferenceCondition = deferred ? sql`
+    NOT EXISTS (SELECT 1 FROM ${activitySolutionLinks}
+      WHERE ${activitySolutionLinks.ownerId}=${input.ownerId} AND ${activitySolutionLinks.activityId}=${input.activityId})
+    AND NOT EXISTS (SELECT 1 FROM ${problemSolutionProfiles}
+      WHERE ${problemSolutionProfiles.ownerId}=${input.ownerId} AND ${problemSolutionProfiles.specialty}=${input.specialty}
+        AND ${problemSolutionProfiles.questionId}=${input.questionId})
+    AND NOT EXISTS (SELECT 1 FROM ${contentBank}
+      WHERE ${contentBank.category}=${input.specialty === "system_design" ? "systemDesign" : input.specialty}
+        AND ${contentBank.id}=${input.questionId} AND json_extract(${contentBank.payload}, '$.solutionProfile') IS NOT NULL)
+  ` : sql`1 = 1`;
   try {
     await db.batch([
       d1TransactionalInvariantGuard(db, currentCondition),
       d1TransactionalInvariantGuard(db, finalizationCondition),
       d1TransactionalInvariantGuard(db, assetSetCondition),
+      d1TransactionalInvariantGuard(db, deferredReferenceCondition),
       db.insert(practiceRecordRevisions).values({
         ownerId: input.ownerId,
         activityId: input.activityId,
