@@ -1,202 +1,184 @@
-# ChatGPT practice backfill, version 1
+# ChatGPT practice exchange v1
 
-Status: proposed contract; no importer or bank-download endpoint is implemented
-by this document. Owning issue: [#453](https://github.com/Vinosaamaa/interview-arc/issues/453).
+**Draft transport contract, not a deployed importer.** Owns the files produced
+by the [practice guide](../agents/chatgpt-practice-prompt.md).
+Issue [#453](https://github.com/Vinosaamaa/interview-arc/issues/453);
+PR [#454](https://github.com/Vinosaamaa/interview-arc/pull/454).
 
-## Workflow
+The [JSON Schema](chatgpt-practice-exchange.schema.json) accepts two document
+kinds: `bank_snapshot` and `practice_export`, each with `schemaVersion: 1`.
+This v1 is being designed in this PR; prior draft shapes are superseded.
+Once adopted, an incompatible change requires a new version. Reject unsupported
+versions instead of guessing. The examples are entirely synthetic:
 
-1. Export a dated question-bank snapshot from authenticated Interview Arc. Give
-   ChatGPT the snapshot as pasted text, or an attachment after verifying that
-   the selected Voice mode can read it. Ask it to repeat the snapshot identity
-   and one question's identity/status before practice.
-2. Use regular ChatGPT Live in the same chat. Pick the exact specialty/question
-   identity, a session key, and an attempt key. Record explicit Start, Pause,
-   Resume, and Finish markers. A marker without a clock reading is an event,
-   not a measured timestamp.
-3. At each Finish, exit Voice if needed and request a structured text export.
-   Copy the available chat transcript into the packet, keeping missing sections
-   explicit. Save each packet privately. At day end, aggregate these packets;
-   do not reconstruct an entire day from cross-chat memory. Group day-end
-   exports by snapshotId so a bank refresh never rewrites source provenance.
-4. Importer validates without writes, resolves the current owner/question,
-   displays timing/source gaps and proposed changes, and accepts an explicit
-   Apply. It returns durable IDs, revisions, hashes and readback results.
+- [Selected public bank](chatgpt-bank-synthetic.example.json)
+- [Voice plus text session export](chatgpt-backfill-synthetic.example.json)
 
-The reusable instructions are in
-[`chatgpt-practice-prompt.md`](../agents/chatgpt-practice-prompt.md). The exchange
-schema is [`chatgpt-practice-exchange.schema.json`](chatgpt-practice-exchange.schema.json).
-Schema conformance is necessary but does not establish evidence truth or
-authorize writes. The semantic checks below are also mandatory.
+## A practical bank input today
 
-## Bank snapshot
+A user can paste selected catalog/status rows or upload existing bank JSON.
+ChatGPT may normalize them to this snapshot, retaining exactly what was supplied.
+An authenticated owner can prepare a file; this contract does not imply an
+existing snapshot endpoint, download button or authorized ChatGPT connection.
 
-`snapshotId` identifies an immutable export; `generatedAt`, `dataAsOf` and
-`timeZone` state its provenance and freshness. `scope` is `selected` or `all`;
-the exporter must finish pagination before asserting `all`. Never interpret a
-question missing from a selected snapshot as absent from the bank.
-
-Each question carries `specialty`, `questionId`, `title`, optional public URL,
-topics and availability. Progress is a separate nullable object containing
-attempt count, last explicit outcome, last completion timestamp and review due
-date. Null means unavailable, not zero attempts or unsolved. Do not compress
-availability, attempt lifecycle, outcome, review status and publication into
-one ambiguous question status. A question can have many attempts.
-
-`visibility=public_catalog` requires every `progress` field to be null. Only
-public-safe catalog metadata may be checked into GitHub. Owner progress,
-personal questions, transcripts and actual export packets stay private even
-when the GitHub repository itself is private: the existing owner-private
-practice contract remains authoritative. An owner snapshot uses
-`visibility=owner_private`; it contains no token, owner identifier, R2 key,
-private endpoint or local file path. The exporting authenticated service binds
-the owner, rather than trusting a model-supplied owner field.
-
-ChatGPT treats progress as “as of dataAsOf,” never live state. Any activity
-completed offline is a local pending event until import succeeds. Refresh the
-snapshot after import. A public website or GitHub page may help discover public
-questions but cannot replace private progress or a verified snapshot receipt.
-
-## Export packet and transcript
-
-An export contains its schema version, stable packet key, snapshot identity,
-source chat keys, source coverage, timezone, sessions and attempts. Local keys
-are assigned once and reused when the same material is exported again; they
-are not claimed to be platform IDs. Multiple chats must be explicitly supplied
-and listed. A conversation title alone cannot prove an identity.
-
-Each attempt names one question and distinguishes `attempt`, `walkthrough` and
-`discussion`. `userAttempted` and `outcome` need explicit source evidence; an
-assistant showing a solution does not establish that the user solved it.
-LeetCode outcomes remain `solved`, `solved_after_reviewing_approach`, or `failed`.
-Unknown outcomes remain null. Other specialties use their existing finalization
-contract; this transport does not invent a generic outcome vocabulary.
-
-Transcript turns preserve speaker, stable source turn key, order, available
-text, nullable timestamp and nullable source timestamp basis. Copy actual chat
-text, including relevant code; never generate missing user answers, merge
-speakers, or replace the conversation with a recap. The summary is separate.
-`complete_provided_source` means all of the supplied source was retained, not
-that the voice transcription is verbatim or all chats were discovered.
-`partial` lists missing ranges. `summary_only` has no transcript turns and
-cannot be finalized as a transcript-backed attempt. Administrative export
-instructions remain outside the practice transcript.
-
-Corrections preserve original source text and attach an explicit correction;
-the v1 packet uses `gaps` to flag corrections requiring review rather than
-silently editing evidence. Audio is not claimed, synthesized or inferred from
-text. Uploaded original audio would require a separate authenticated asset
-ingestion contract and its byte/hash receipt.
-
-## Timing without a pretend stopwatch
-
-Approximate timing is accepted. Do not require a timestamp on every command
-or block practice because a stopwatch is unavailable. Start opens the logical
-timer, Pause suspends it, Resume reopens it, and Finish closes it. Preserve an
-ordered `events` log and `state` even when timestamps are null. Repeated Start
-while running and Pause while paused are no-ops, not additional intervals.
-Resume before Start is invalid. A finished attempt needs a new attempt key to
-restart. Finish may close a running or paused attempt. Ending a Voice call
-does not itself imply Finish.
-
-Use actual available event times where possible. Without them, ask once at
-Finish for an approximate active duration, if the user wants to supply one;
-“about 20 minutes” is valid estimated timing. Otherwise retain unknown timing.
-Do not claim an unsupported background counter. Import validates event state
-transitions and any intervals derived from timestamped events.
-
-Both the session and each activity carry independent timing objects:
-
-| Basis | Permitted representation |
+| Field | Meaning |
 | --- | --- |
-| `observed_clock` | Explicit externally captured start/end intervals and evidence references; the importer calculates elapsed time. |
-| `user_reported` | User-stated boundaries or elapsed duration, with their source reference; retained as reported timing. |
-| `estimated` | Explicitly labelled duration estimate and its reason; never written into measured timer totals. |
-| `unknown` | No elapsed value and no synthetic intervals. Start/Finish dialogue alone is insufficient. |
+| `snapshot` | Stable local `snapshotId`, source description, known revision and nullable `dataAsOf`. |
+| `scope` | `selected` unless the complete source and all pages were actually read. |
+| `visibility` | `public_catalog` requires every progress value null; real personal inputs are `owner_private`. |
+| `questions[]` | Specialty, exact bank ID or null, title, public URL, available prompt, topics, availability, nullable progress. |
 
-Every non-null boundary timestamp includes an offset. `timeZone` is an IANA
-zone, not an abbreviation. Preserve exact timestamps across midnight;
-completion date is derived in the repository's practice timezone
-`America/Los_Angeles`. Export time and import time are distinct from practice
-time. Unknown completion time does not become midnight or the import time.
-When only the practice date is known, retain `practiceDate` with
-`dateBasis=user_reported` and leave exact timestamps null. This permits honest
-day-level backfill without demanding clock precision. A derived date must match
-the actual completion instant in the practice timezone.
+Map bank `id` to `questionId`; use `leetcode`, `system_design` or
+`behavioral` as the specialty. Preserve missing values: no progress object
+means unknown, not zero attempts. Progress separates count, last coding
+outcome, last completion and review due date. Do not collapse availability,
+attempt lifecycle, result and publication into one “status.”
 
-An interval is active time between a known Start/Resume and Pause/Finish. Reject
-negative or overlapping intervals, duplicate boundaries, missing offsets,
-invalid calendar timestamps and arithmetic mismatches. Compute seconds using
-instants, including DST transitions. Unknown pause duration makes active time
-unknown even when overall wall time is known. Do not infer silence as pause,
-sum activity durations as session duration, or count unrelated conversation.
-`reportedSeconds` is used only for `user_reported`/`estimated`; observed elapsed
-seconds are calculated, not model-authored. A user report with intervals must
-agree with their sum if a reported total is also provided.
+`sourceRevision` can be a supplied commit or the source's date-only
+`updatedAt`; it is not a verified current clock. Leave `dataAsOf` null unless
+an actual observation/supplied timestamp is known. For several sources with
+different freshness, prepare separate snapshots. Refresh creates a new snapshot
+ID; keep older snapshots referenced by existing attempts. A selected snapshot
+says nothing about omitted questions.
 
-Real timer evidence may come from Interview Arc, an explicit device-clock
-record, or user-supplied timestamps. A model's “I started a timer” assertion and
-memory are not clock evidence. Observed intervals must reference supplied
-evidence which the importing adapter can inspect. Chat message timestamps, if
-available from an actual export, are message events rather than proof of
-continuous active practice.
+Only public-safe catalogs and synthetic examples belong in Git. Owner status,
+personal questions, real exports, answers and transcripts stay private even
+when the repository is private. Never include credentials, owner IDs, local
+paths, private endpoints or storage keys.
 
-## Validation, reconciliation and apply
+## Export structure
 
-Before any durable mutation, an importer must:
+`practice_export` contains:
 
-1. Validate the version/schema, bounded size, IANA timezone and semantic rules;
-   reject unknown versions and unknown fields instead of guessing.
-2. Resolve authenticated ownership independently. Resolve exact
-   `(specialty, questionId)` against current bank state. A missing/inactive
-   question or changed identity requires a review decision, never fuzzy linking.
-3. Require unique source/chat/session/attempt/turn keys and contiguous ordered
-   transcript turns per attempt. Every referenced source key and evidence
-   reference must resolve to supplied material. Distinguish duplicate imports
-   from a second genuine attempt at the same question.
-4. Preview the source, coverage, missing evidence, timing basis, outcome,
-   duplicate status and intended target. Default to a new historical session;
-   do not attach to Today's active session or alter any running timer.
-5. Derive canonical payload hashes in trusted code, not ChatGPT. Persist an
-   owner-scoped import receipt and unique mapping for each source chat/session/
-   attempt key. Same identity plus same hash returns the existing receipt;
-   same identity plus different bytes is a conflict requiring an explicit
-   correction operation. A new packet ID must not bypass attempt-level dedupe.
-6. After authorized Apply, atomically claim the import identity and write the
-   accepted draft evidence and exact mappings. Use expected revisions for any
-   explicit amendment; never overwrite completed timers or immutable records.
-   Retrying after an uncertain response first reads the receipt.
-7. Run existing specialist finalization requirements separately. Approximate
-   or unknown time does not by itself block transcript backfill; retain its
-   label. Missing required outcome, source coverage or review stays visibly pending; importing a packet
-   is not proof of readiness/publication. Reusable Solution Profiles are not
-   created or overwritten merely because ChatGPT supplied an answer.
-8. Read back all accepted IDs/revisions/hashes and report complete, partial or
-   rejected results. Advance bank progress only from accepted canonical events.
+- `packetId`: a local delivery identity; unchanged repeat exports retain it.
+- `exportedAt`: an actual exposed/supplied timestamp, otherwise null.
+- `timeZone`: `America/Los_Angeles`, the repository's practice-day convention.
+- `snapshots[]`: provenance descriptors used by attempts; not duplicate banks.
+- `sources[]`: supplied chat captures with stable `sourceChatKey`, kind,
+  provided range, coverage, gaps and ordered turns.
+- `sessions[]`: stable `sessionKey`, timing and question attempts.
+- `gaps[]`: packet-wide missing sessions or unresolved conflicts.
 
-Deleted targets must not be recreated by backfill. An importer must check
-administrative deletion protection and preserve retry receipts. Unknown or
-estimated duration requires a provenance-aware historical timing representation;
-do not shoehorn it into the existing exact live timer. This is missing runtime
-work, not permission for manual database writes.
+Assign local opaque keys once, unique across the supplied chats; preserve them
+when copying to another chat. Do not reuse generic chat/session/attempt labels
+from a previous unrelated conversation.
+Do not invent platform IDs or calculate pretend hashes. A daily packet may
+combine several chats and snapshots. Exact duplicate turns/attempts are reused;
+two real attempts at one question keep distinct attempt keys. Chat titles alone
+are insufficient identity evidence.
 
-## Existing support and remaining implementation
+Each attempt includes its stable `attemptKey`, nullable snapshot reference,
+question identity/title/public URL and supplied prompt, nullable Pacific
+completion date and its basis, practice mode, kind, actual attempt flag, coding outcome/evidence,
+source chat/turn references, timing, summary, review and gaps. An unlisted
+question can have null `questionId`; it needs explicit owner resolution,
+not an invented slug or fuzzy match, before canonical persistence.
 
-The current repository supplies question-bank schemas, owner-scoped practice
-records, transcript storage, separate Solution Profile revisions, live timers
-and finalization jobs. See `db/schema.ts`, `db/durable-practice.ts`,
-`db/specialist-write-jobs.ts`, and the
-[`owner-private practice contract`](owner-private-practice-records.md).
+Retain the prompt actually supplied at practice time; do not replace it with a
+newer bank prompt. If absent, use null and state the gap. Snapshot provenance
+can identify the source version but does not recover missing prompt text.
 
-It does not yet implement this exchange, an authenticated snapshot download,
-a historical-import preview/apply flow, an import identity ledger, or the
-timing-provenance projection described above. The existing
-`app/api/practice-record/route.ts` is a read route, not an import endpoint.
-`source=imported` on a transcript alone does not satisfy this contract.
+Only a demonstrated/user-reported coding attempt may carry `solved`,
+`solved_after_reviewing_approach` or `failed`. Its evidence turn keys must
+resolve, and the review must state whether success is user-reported or based on
+a supplied judge result. Unknown coding results stay null. Behavioral/design
+results belong in the factual summary/review, not a fabricated coding outcome.
+A walkthrough or discussion never becomes a solved attempt because the
+assistant supplied an answer.
 
-Runtime acceptance must cover: same-packet retry; changed-byte conflict;
-new-packet duplicate attempt; owner isolation; stale bank metadata; unknown and
-estimated time; pauses and DST; midnight completion; truncated/multi-chat
-sources; walkthrough versus real attempt; ambiguous write recovery; existing
-completed target; deleted target; and unchanged running Today timers. Test the
-chosen ChatGPT account/mode with a synthetic snapshot before promising file
-access. No private practice fixture belongs in Git.
+## Source fidelity
+
+Copy each supplied turn exactly once with stable globally unique `turnKey`,
+source order `sequence`, speaker, text/code and nullable timestamp/basis.
+Sequences retain original order and may have gaps for omitted ranges; never
+renumber source turns during a repeated export. Attempt `turnKeys` select
+their conversation without duplicating text. Timing/result control messages may
+be retained as evidence; the eventual reader excludes administration from
+practice dialogue.
+
+`complete_provided_source` means the specified supplied range was checked and
+copied, not that Voice was verbatim or every chat was discovered.
+`partial` requires named gaps. `summary_only` has no turns and is not
+transcript evidence. Keep generated summary/review outside source turns.
+An explicit correction appends evidence and review notes; original text stays
+unchanged. Do not claim audio/drawings were captured when only text is present.
+
+A source chat may gain new supplied turns at day end. Merge by stable turn key
+and preserve source ordering; the same key with changed speaker/text is a
+conflict. Retain all stated missing ranges; extend complete coverage only after
+checking the newly supplied source. A smaller repeated capture must not erase
+earlier turns.
+
+## Approximate timing
+
+Each session and attempt has `timing`:
+
+| Field | Rule |
+| --- | --- |
+| `state` | `running`, `paused` or `finished`; a partial checkpoint may remain paused. |
+| `activeMinutes` | Number or null; never derive an unknown question duration from a session-only estimate. |
+| `basis` | `observed_boundaries`, `user_estimate` or `unknown`. |
+| `evidence` | Explain actual clock/boundary source or quote/reference the supplied rough total; unknown may be null. |
+| `events[]` | Ordered effective Start/Pause/Resume/Finish transitions; nullable times with timestamp basis and evidence. |
+
+There is no required running background process. Start/Pause/Resume/Finish
+record state; duplicate commands in the same state do not add intervals.
+Resume requires pause. Finish closes running or paused state. A completed
+attempt cannot be reopened as new work under the same key. Switching questions
+closes the old attempt and pauses/resumes the parent as the guide specifies.
+
+For observed boundaries, every effective transition used must have a supported
+timestamp; validate order and sum active intervals, excluding pauses.
+A running/paused checkpoint uses only closed intervals and must say so.
+For user estimates, accept rough active minutes and preserve the user's basis.
+Missing boundaries do not prevent using an estimate; never synthesize those
+boundaries from the total. With no supported total, use unknown/null.
+
+One session with two questions has one session total and two question totals;
+these are separate views of the same time, not three quantities to add.
+Do not sum overlapping sessions. If overlap cannot be ruled out, report
+per-session totals without claiming a daily active-time total. The Pacific
+practice date comes from completion evidence or the user's supplied date;
+unknown stays null. Preserve actual offsets across daylight saving and midnight.
+
+## Owner backfill boundary
+
+These are requirements for future implementation or an explicitly authorized
+owner review, not permission to mutate a database. Before saving:
+
+1. Validate schema, bounded input, referenced IDs, chronological ordering,
+   command transitions, timing arithmetic and result evidence. JSON Schema
+   checks shape; it cannot prove transcript truth or reference resolution.
+2. Bind the authenticated owner independently; resolve exact specialty/question
+   identity against current state. Preview stale/missing questions, gaps,
+   estimates, results and duplicates. Do not infer zero time or today’s date.
+   Arc permits one canonical question per Pacific practice day: a second real
+   source attempt stays preserved for explicit reconciliation, not silently
+   discarded or inserted in violation of that rule.
+3. Use an owner-scoped mapping of source chat/session/attempt identities to
+   canonical records. Trusted code calculates content hashes. An exact retry
+   returns the same receipt; changed content under an accepted identity needs
+   explicit correction review. Changing only packet ID must not bypass dedupe.
+   Partial checkpoints are retained as draft evidence, never published as a
+   completed attempt; later completion is an explicit revision of that draft.
+4. After authorized Apply, persist through the
+   [owner-private finalization contract](owner-private-practice-records.md),
+   with immutable revisions, expected-revision checks and durable retry receipts.
+   Never attach silently to Today's active session, rewrite a running timer,
+   recreate a deleted target or overwrite a Solution Profile.
+5. Read back exact accepted IDs/revisions/hashes before claiming saved. Preserve
+   pending/failed records and recover ambiguous writes by checking the receipt.
+   Update bank progress only from accepted canonical events.
+
+An estimate needs a provenance-aware historical representation. Do not force it
+into an exact live timer or invent completion timestamps to satisfy current
+schemas. Missing timing alone need not block evidence capture, but missing
+fields required by canonical finalization remain visibly pending.
+
+This PR provides the guide, research, schema and synthetic examples only.
+It adds no snapshot service, preview/apply endpoint, import identity mapping,
+historical timing projection or deployed writer. `app/api/practice-record/route.ts`
+is a GET route, not this importer. Runtime acceptance must later prove retries,
+changed-content conflicts, owner isolation, question resolution, truncated
+sources, estimated/unknown timing, pause arithmetic, midnight handling and
+unchanged Today timers. Documentation/schema validation cannot establish those.

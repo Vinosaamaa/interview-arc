@@ -4,13 +4,13 @@ id: architecture-review-chatgpt-practice-backfill
 revision: 1
 type: architecture-review
 status: proposed
-title: Separate ChatGPT practice capture from authoritative backfill
+title: Make regular ChatGPT practice usable before integration
 repository: interview-arc
 capabilityIds: ["practice-records", "problem-banks"]
 createdAt: 2026-09-09
 reconstructed: false
 confidence: verified
-unknowns: ["Account-specific text-to-Live file and context handoff", "Historical importer and bank export runtime are not implemented"]
+unknowns: ["Account-specific text and Live context or integration access", "Historical importer and snapshot service are not implemented"]
 modules: ["practice-records", "problem-banks"]
 interfaces: ["chatgpt-practice-exchange-v1"]
 seams: ["external-chat-to-private-practice-record"]
@@ -32,44 +32,50 @@ pr: 454
 release: null
 run: null
 ---
-# Separate ChatGPT practice capture from authoritative backfill
+# Make regular ChatGPT practice usable before integration
 
-The proposed workflow uses regular ChatGPT text to prepare a guide and dated
-bank snapshot, Live for practice, and text for a structured Finish packet.
-Official documentation distinguishes Live's web/text context from connected
-apps available in supported text experiences. Account-specific handoff remains
-unverified. The research and portable contract are implemented as documents
-and schema; no runtime import capability is claimed.
+The first deliverable is a GitHub guide that regular ChatGPT can follow.
+It now starts with a loading prompt and actual repository bank links, accepts
+ordinary pasted question rows, and supports both typed practice and Live.
+Private progress can come from selected authenticated UI rows or a separately
+configured text integration. No new snapshot endpoint is a prerequisite.
 
-## Decision
+## Alternatives assessed
 
-Keep capture separate from authoritative persistence. Preserve source turn
-identities, transcript coverage, explicit outcomes and logical timer commands.
-Approximate time is valid; classify it separately from observed clock time.
-Unknown time does not justify inventing boundaries or blocking transcript
-capture. Question progress is an owner-private dated snapshot, not public Git
-content and not a live value after offline work.
+Public web retrieval can supply readable guide/catalog content, but cannot
+establish private progress. Authorized GitHub access and Pro read/fetch MCP
+are documented text paths with account-specific availability. Current Live
+documentation excludes connected apps/plugins. Custom GPT actions require
+a separate configured API/authentication path; this review does not establish
+them as a Live workaround. Pasted selected context is the practical fallback.
 
-Direct authenticated access in Live was not selected because no supported
-route was established. Public web retrieval remains optional with version
-readback. Pasted context is the fallback for unavailable files or connectors.
-End-of-day memory reconstruction was rejected as a transcript source; daily
-aggregation combines supplied Finish packets instead.
+Start/Pause/Resume/Finish track logical state. Available boundary evidence can
+support active minutes; otherwise a single rough user estimate at Finish is
+accepted. No background stopwatch was established by reviewed documentation.
+Unknown time is retained rather than fabricated or made a capture blocker.
 
-## Persistence boundary
+## Exchange design
 
-A future importer must validate and preview before Apply, bind the current
-owner independently, deduplicate by stable source/attempt identity, preserve
-immutable records and running timers, and return exact readback receipts.
-Model-produced packets cannot authorize writes, replace Solution Profiles, or
-turn estimated duration into measured live timer state.
+The draft v1 stores supplied source text once, then references turns from
+question attempts. Source coverage and generated review remain separate;
+Voice text is not labeled verbatim audio. Multiple source chats and refreshed
+snapshot references fit one daily packet. Unresolved question IDs remain null
+until the owner resolves them. Session totals do not invent question durations.
+
+Owner persistence remains separate. The future boundary requires schema and
+reference validation, a reviewable preview, authenticated ownership, stable
+attempt identities, conflict detection and exact readback. Imported estimates
+must retain their basis without altering current live timers. Schema-valid
+output is neither a saved record nor a deployed import implementation.
 
 ## Verification and limits
 
-Draft 2020-12 schema validation accepts the two synthetic examples and rejects
-invalid versions, public progress leakage, owner injection, invalid timing,
-false discussion outcomes and unsupported transcript assertions. JSON Schema
-does not enforce cross-reference resolution, timing arithmetic or state-machine
-transitions; those semantic checks are specified for runtime implementation.
-No real practice data, account UI test, database mutation or deployment is part
-of this change.
+Fresh Draft 2020-12 validation passed both synthetic files and four additional
+valid cases; 16 invalid variants were rejected. The synthetic source/question
+reference graph and key uniqueness were checked. These are document/schema
+checks, not runtime persistence or ChatGPT account acceptance.
+
+No account connection, private practice data, database mutation or deployment
+was part of this assessment. The capability report links the current official
+sources and identifies unverified routes; the contract lists remaining runtime
+acceptance requirements.

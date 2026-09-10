@@ -1,101 +1,106 @@
-# Regular ChatGPT text and Live Voice for practice
+# Regular ChatGPT practice: text and Live access
 
-Verified against official documentation on **2026-09-09**. No account-specific
-UI acceptance has been performed. This is separate from Desktop/Codex Voice.
+Fresh assessment: **2026-09-09**. Account acceptance: **not performed**.
+Evidence is official documentation and repository inspection, not access to
+the user's ChatGPT account or private practice state.
 
-## Capability comparison
+## Decision and usage
 
-| Need | Regular text ChatGPT | Regular Chat Live Voice |
+Load the [guide](../agents/chatgpt-practice-prompt.md) and selected bank rows in
+regular text ChatGPT; continue in text or switch to Live in the same chat.
+Return to text for the full export. Pasted rows make practice possible today;
+an integration is optional.
+
+The current Voice help page lists unlimited GPT-Live-1 for **$200/month Pro**
+in Chat on web/iOS/Android. Desktop Voice uses a separate allowance, and tasks
+it starts consume Codex usage. Use ordinary Chat for this workflow; the plan
+does not make every tool, model or API unlimited.
+[Chat Voice](https://help.openai.com/en/articles/20001274),
+[Desktop Voice](https://learn.chatgpt.com/docs/features/voice)
+
+## Access assessment
+
+| Source/route | Regular text ChatGPT | Regular Chat Live |
 | --- | --- | --- |
-| Public GitHub guide or public bank page | Web retrieval is a candidate; verify actual content and version. | Web search is supported; verify the retrieved version, not just a search snippet. |
-| Private GitHub guide | The GitHub app reads authorized repositories, including documentation; availability varies. | Connected apps/plugins are currently unsupported. |
-| Authenticated bank API | A configured integration is required. Pro supports read/fetch MCP in developer mode on web. | No documented arbitrary authenticated REST/MCP route. |
-| Custom GPT API actions | Supported configurations use OpenAPI and authentication. Actions are unavailable in the Pro **model mode**, distinct from the Pro subscription. | Compatibility with regular Live is not established. |
-| Uploaded bank file | File upload and document analysis are supported subject to limits. | Manual supported-file attachment is account-dependent; Live cannot retrieve Library files. |
-| Pasted snapshot | Supported text context. | Text in the same chat is supported. |
-| Background stopwatch | No reviewed documentation guarantees an automatic clock or continuous counter. | Background conversation does not establish a background timer. |
+| Public GitHub guide/bank | Web retrieval is a candidate; verify actual content and revision. | Web search is supported; actual file retrieval must still succeed. |
+| Private GitHub | Authorized GitHub app can retrieve permitted documentation; standard-chat availability varies by account/surface. | Connected apps/plugins are explicitly unsupported; prepare permitted content in text. |
+| Authenticated Arc website/REST URL | A URL is not a login. Requires an available authenticated tool or user-supplied content. | No documented arbitrary authenticated REST route; web search does not establish one. |
+| Custom Model Context Protocol (MCP) app | Pro developer mode on web supports read/fetch; configure and test server/authentication first. | Apps are unsupported; a text integration does not become callable in Live. |
+| Custom GPT API action | Requires OpenAPI and configured authentication, using a supported non-Pro **model mode**, distinct from the Pro subscription. | Current opened Live documentation does not establish custom-action support; not selected as a workaround. |
+| Uploaded file | Supported files can supply a bank/export, subject to limits. | Manual supported attachments vary by account; Library retrieval is unavailable. |
+| Pasted text | Direct context for guide, selected rows and prior exports. | Text in the same chat is supported; verify selected rows after switching. |
 
-Sources: [ChatGPT Voice](https://help.openai.com/en/articles/20001274),
-[GitHub app](https://help.openai.com/en/articles/11145903-connecting-github-to-chatgpt),
-[developer-mode MCP](https://help.openai.com/en/articles/12584461),
+Sources: [Search](https://help.openai.com/en/articles/9237897),
+[GitHub](https://help.openai.com/en/articles/11145903-connecting-github-to-chatgpt),
+[MCP developer mode](https://help.openai.com/en/articles/12584461),
 [GPT actions](https://help.openai.com/en/articles/9442513),
-[file uploads](https://help.openai.com/en/articles/8555545-file-uploads-faq),
-[ChatGPT Search](https://help.openai.com/en/articles/9237897).
+[files](https://help.openai.com/en/articles/8555545-file-uploads-faq),
+[Live features](https://help.openai.com/en/articles/20001274).
 
-Regular text can therefore prepare the guide and a fresh snapshot before the
-user switches to Live in the same chat. This is a design inference from the
-documented components; the account must demonstrate that Live can read that
-context. Text can refresh a connected bank between sessions. Live must not
-claim to refresh it through an unavailable integration.
+The same-chat preparation workflow is an inference from documented components.
+Pro MCP read/fetch is not proof that this account connected Interview Arc.
+General app write support does not establish Pro custom-MCP writes. A GPT
+action is a separately configured integration, not a request enabled by pasting
+an API URL. Do not paste credentials/cookies into chat to simulate access.
 
-Web search does not imply access to the user's browser cookies, a private
-repository, arbitrary authorization headers, or a current private REST result.
-A public guide can be on GitHub; personal question progress remains an
-owner-private snapshot. Neither a repository URL nor an API URL proves that
-ChatGPT read it. Require a version and selected question readback.
+Current help-page variants and older search snippets disagree about custom-GPT
+Voice restrictions. The directly opened current Live page did not establish
+that route; its availability remains unverified here.
 
-## Usage distinction
+## What this repository supplies
 
-The current Voice help page lists unlimited GPT-Live-1 for the $200 Pro tier in
-regular Chat Live. Desktop Voice has its own allowance, and tasks started via
-Voice consume Codex usage. This supports trying regular Chat for ongoing
-practice, but does not imply unlimited use of every ChatGPT tool or model.
-Account terms and availability must be checked when this guide is reused.
-Sources: [Chat Voice limits](https://help.openai.com/en/articles/20001274),
-[Desktop Voice](https://learn.chatgpt.com/docs/features/voice).
+The three `practice/*/bank/questions.json` files contain catalogs with IDs,
+URLs and available prompts. Their `updatedAt` values describe the files, not
+today's personal attempts/reviews. Current records belong to owner-private
+D1/R2 under the [existing contract](../contracts/owner-private-practice-records.md).
 
-## Approximate timer
+`app/api/content-index/route.ts` is behind the website Access gate;
+`app/api/state/route.ts` resolves an owner; `app/api/practice-record/route.ts`
+is an owner-scoped GET. `mcp-worker/` also exists. These are application
+interfaces, not evidence of ChatGPT compatibility or a snapshot/import feature.
 
-No continuously running process is needed to calculate elapsed intervals.
-Start records a boundary; Pause closes it; Resume opens another; Finish closes
-the last. Status reports the state and accumulated time when evidence exists.
-For example, user-reported 10:00 Start, 10:18 Pause, 10:25 Resume and 10:42 Finish
-yield about 35 active minutes, with seven paused minutes excluded.
+Today: read the catalog, optionally copy selected private status from the
+authenticated UI, or use an already tested read-only text integration.
+An owner can prepare the small snapshot in the [contract](../contracts/chatgpt-practice-backfill.md).
+No new export endpoint is assumed. Refresh after backfill or when current
+status matters; offline status is dated evidence, never live state.
 
-Use an actually available clock tool or user-supplied times, at minute
-resolution if desired. A configured read-only text integration can be designed
-to return server time; this is not a universal ChatGPT clock. If times are
-unavailable, preserve the command state and accept a single approximate total
-at Finish. Do not infer a clock from “start,” word count, or remembered pacing.
-Scheduled Tasks are separate and do not support Voice chats; they are not a
-substitute for this timer. [Tasks](https://help.openai.com/en/articles/10291617-tasks-in-chatgpt)
+## Timing
+
+No reviewed ordinary Chat/Live documentation establishes a persistent
+stopwatch, model-visible monotonic clock, automatic pause accounting or reliable
+spontaneous time-up interruption. This is an evidence limit, not a claim that
+the application has no internal timing mechanisms.
+
+Keep Start/Pause/Resume/Finish as logical commands. With actual boundaries,
+exclude pauses: 10:00 Start, 10:18 Pause, 10:25 Resume, 10:42 Finish gives about
+35 active minutes. Otherwise accept one rough total at Finish, or unknown.
+No repeated timestamp demands or pacing-based guesses are needed.
+
+Background conversations keep audio interaction active; that does not prove
+an exposed stopwatch. Scheduled Tasks explicitly exclude Voice chats.
+[Background behavior](https://help.openai.com/en/articles/20001274),
+[Scheduled Tasks](https://help.openai.com/en/articles/10291617-tasks-in-chatgpt)
 
 ## Transcript and export
 
-Voice transcripts are explicitly non-verbatim and may omit or alter speech.
-They appear in chat history after Voice; Live responses also appear as text.
-Copy available transcript text and distinguish it from a generated summary.
-[Voice transcript limits](https://help.openai.com/en/articles/20001274)
+Live transcripts can differ from speech. Preserve available text and identify
+gaps. Regular text exports preserve supplied messages/code but still flag
+context truncation. A generated recap is never recovered raw dialogue.
+Save each Finish packet and aggregate supplied packets at day end; no promise
+of unsupplied chat or audio recovery is justified.
+[Transcript behavior](https://help.openai.com/en/articles/20001274)
 
-Pro account exports contain chat history and can take up to seven days; the
-download link expires after 24 hours. Exported conversation JSON files are
-documented, but a stable timestamp schema or measured active duration is not.
-Treat account export as an optional source, not the daily workflow's dependency.
-[Export data](https://help.openai.com/en/articles/7260999-how-do-i-export-my-chatgpthistory-and-data),
-[conversation files](https://help.openai.com/en/articles/9106926)
+Account export is an optional recovery source, can take up to seven days and
+includes chat history. It is not a required daily Finish step, nor evidence of
+a stable per-turn timestamp format or active-minute total.
+[Account export](https://help.openai.com/en/articles/7260999-how-do-i-export-my-chatgpthistory-and-data)
 
-Memory is synthesized personal context, not a documented exhaustive transcript
-ledger. Save each Finish packet, then aggregate supplied packets at day end.
-Never promise a full-day transcript across chats from memory alone.
-[Memory FAQ](https://help.openai.com/en/articles/8590148-memory-faq)
+## Small account acceptance check
 
-## Account acceptance still required
-
-Use a synthetic question and no private data for the first check:
-
-1. Confirm regular Chat Live rather than paired Desktop/Codex Voice.
-2. In text, read the guide and snapshot; repeat their exact version and one
-   question's ID/status. For private GitHub/MCP, verify the authorized connector.
-3. Switch to Live and repeat an interior snapshot value. Test an attachment
-   separately if it will replace pasted text.
-4. Say Start, Pause, Resume, Status and Finish. Verify state transitions and
-   honest timestamp/estimate handling, without demanding second accuracy.
-5. End Voice and export in text. Compare selected turns, question ID, estimate,
-   gaps and packet keys with the supplied source.
-6. Repeat the export and verify stable keys. Provide two packets for the
-   day-end aggregation, ensuring missing sessions are not invented.
-
-Older search snippets claimed specific custom-GPT Voice restrictions that were
-absent from the current opened article. They were not treated as current proof.
-The schemas and importer requirements live in the
-[backfill contract](../contracts/chatgpt-practice-backfill.md).
+With synthetic data: load guide/bank in text and verify an ID/prompt; switch
+to Live and verify it again; Start, Pause, Resume and Finish with a rough total.
+End Voice, export in text and compare source turns, speakers, gaps and time
+basis. Repeat export to check stable identities; aggregate two supplied sessions.
+Test private GitHub, MCP and manual attachment separately only when selecting
+those routes. This PR has not run that account test.
