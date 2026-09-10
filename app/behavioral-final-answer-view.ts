@@ -37,6 +37,10 @@ type LoadedPastSnapshotFields = {
   pinnedNotes?: unknown;
   finalization?: unknown;
   artifact?: unknown;
+  practiceRecord?: unknown;
+  practiceAssets?: unknown;
+  drawingAddition?: unknown;
+  editorialAddition?: unknown;
 };
 
 function loadedPastSnapshotFields(snapshot: LoadedPastSnapshotFields): LoadedPastSnapshotFields {
@@ -55,6 +59,10 @@ function loadedPastSnapshotFields(snapshot: LoadedPastSnapshotFields): LoadedPas
     ...(snapshot.pinnedNotes === undefined ? {} : { pinnedNotes: snapshot.pinnedNotes }),
     ...(snapshot.finalization === undefined ? {} : { finalization: snapshot.finalization }),
     ...(snapshot.artifact === undefined ? {} : { artifact: snapshot.artifact }),
+    ...(snapshot.practiceRecord === undefined ? {} : { practiceRecord: snapshot.practiceRecord }),
+    ...(snapshot.practiceAssets === undefined ? {} : { practiceAssets: snapshot.practiceAssets }),
+    ...(snapshot.drawingAddition === undefined ? {} : { drawingAddition: snapshot.drawingAddition }),
+    ...(snapshot.editorialAddition === undefined ? {} : { editorialAddition: snapshot.editorialAddition }),
   };
 }
 
