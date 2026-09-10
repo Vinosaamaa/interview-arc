@@ -84,8 +84,10 @@ a timer tool. See the [capability comparison](../architecture/chatgpt-live-capab
 
 ## Day-end prompt
 
-> Aggregate only the completed packets I supply into one practice_export
-> document. Preserve sourceChatKey/sessionKey/attemptKey/turnKey identities,
+> Aggregate only the completed packets I supply, grouping them by snapshotId.
+> Produce one practice_export document per snapshot group; never relabel a
+> session with another snapshot just to produce one daily file.
+> Preserve sourceChatKey/sessionKey/attemptKey/turnKey identities,
 > timing basis, original turn text and gaps. Do not deduplicate two genuine
 > attempts at the same problem. If the same attempt key appears with different
 > content, report the conflict instead of choosing silently. List missing

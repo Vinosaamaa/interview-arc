@@ -16,7 +16,8 @@ by this document. Owning issue: [#453](https://github.com/Vinosaamaa/interview-a
 3. At each Finish, exit Voice if needed and request a structured text export.
    Copy the available chat transcript into the packet, keeping missing sections
    explicit. Save each packet privately. At day end, aggregate these packets;
-   do not reconstruct an entire day from cross-chat memory.
+   do not reconstruct an entire day from cross-chat memory. Group day-end
+   exports by snapshotId so a bank refresh never rewrites source provenance.
 4. Importer validates without writes, resolves the current owner/question,
    displays timing/source gaps and proposed changes, and accepts an explicit
    Apply. It returns durable IDs, revisions, hashes and readback results.
@@ -112,7 +113,7 @@ Both the session and each activity carry independent timing objects:
 | `estimated` | Explicitly labelled duration estimate and its reason; never written into measured timer totals. |
 | `unknown` | No elapsed value and no synthetic intervals. Start/Finish dialogue alone is insufficient. |
 
-Every boundary includes an offset-bearing timestamp. `timeZone` is an IANA
+Every non-null boundary timestamp includes an offset. `timeZone` is an IANA
 zone, not an abbreviation. Preserve exact timestamps across midnight;
 completion date is derived in the repository's practice timezone
 `America/Los_Angeles`. Export time and import time are distinct from practice
