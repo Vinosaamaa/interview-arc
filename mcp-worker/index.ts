@@ -3,6 +3,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ScopedMcpServer } from "./scoped-server";
 import { registerChatgptTools } from "./chatgpt-tools";
 import { registerEditorialTools } from "./editorial-tools";
+import { registerLeetcodeTools } from "./leetcode-tools";
+import { registerDrawingTools } from "./drawing-tools";
 import { resolveChatgptAccessOwner, type ChatgptAccessConfig } from "./chatgpt-access";
 import chatgptPracticeGuide from "../docs/agents/chatgpt-practice-prompt.md";
 import { z } from "zod";
@@ -2612,6 +2614,8 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
     : new McpServer({ name: "Interview Arc", version: "1.0.0" });
   registerEditorialTools(server, env.DB, ownerId);
   if (chatgpt) registerChatgptTools(server, env.DB, ownerId, (activityId) => readCurrentPracticeDesignCheckpoint(ownerId, activityId, env.AUDIO));
+  if (chatgpt) registerLeetcodeTools(server, env.AUDIO, ownerId);
+  if (chatgpt) registerDrawingTools(server, env.DB, env.AUDIO, ownerId);
 
   server.registerTool(
     "get_practice_interaction_mode",

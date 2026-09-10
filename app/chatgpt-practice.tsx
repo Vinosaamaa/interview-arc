@@ -5,6 +5,7 @@ import { CHATGPT_IMPORT_MAX_BYTES, chatgptTimingLabel, type ChatgptExport, type 
 import type { readChatgptBank } from "../db/chatgpt-bank";
 import type { listImportedPractice } from "../db/chatgpt-import-store";
 import type { PracticeEditorial } from "../db/practice-editorial";
+import type { PracticeDrawing } from "../db/practice-drawing";
 import "./chatgpt-practice.css";
 
 type Bank = Awaited<ReturnType<typeof readChatgptBank>>;
@@ -27,7 +28,7 @@ export default function ChatgptPractice({ MarkdownBody }: { MarkdownBody: Compon
   const [message, setMessage] = useState("");
   const [page, setPage] = useState<Page | null>(null);
   const [pending, setPending] = useState<Page | null>(null);
-  const [selected, setSelected] = useState<(ImportedPractice & { editorial?: PracticeEditorial | null }) | null>(null);
+  const [selected, setSelected] = useState<(ImportedPractice & { editorial?: PracticeEditorial | null; drawing?: PracticeDrawing | null }) | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const editor = useRef<HTMLDetailsElement>(null);
   const refresh = useCallback(async () => {
@@ -121,6 +122,7 @@ export default function ChatgptPractice({ MarkdownBody }: { MarkdownBody: Compon
         <h3>Prompt used</h3><MarkdownBody source={selected.attempt.question.prompt ?? "The source did not supply a prompt."} />
         <h3>Attempt summary</h3><MarkdownBody source={selected.attempt.summary || "No summary supplied."} />
         <h3>Activity review</h3><MarkdownBody source={selected.attempt.review || "No review supplied."} />
+        {selected.drawing && <section aria-label="Saved drawing"><h3>Saved drawing</h3><p>{selected.drawing.authorship === "owner" ? "Your drawing" : "AI-generated reference"} · Drawing revision {selected.drawing.revision} · {selected.drawing.elementCount} elements</p><div className="chatgpt-import-actions"><a href={selected.drawing.url} target="_blank" rel="noreferrer">Open diagram in Excalidraw ↗</a><a href={selected.drawing.downloadUrl}>Download editable drawing</a></div><p className="chatgpt-import-note">Arc retains the editable original. This snapshot does not update when you edit a separate browser canvas.</p></section>}
         {selected.editorial && <section aria-label="Editorial added after practice"><h3>Editorial added after practice</h3><p><a href={selected.editorial.editorialUrl} target="_blank" rel="noreferrer">Official editorial ↗</a> · Addition revision {selected.editorial.revision} · Read {selected.editorial.accessedAt}</p><MarkdownBody source={selected.editorial.explanation} /></section>}
         <details><summary>Conversation · supplied transcript</summary>{selected.sources.map((s) => <section key={s.sourceChatKey}><p>Linked turns from {s.providedRange}. Original capture: {s.coverage.replaceAll("_", " ")}.</p>{s.turns.map((t) => <article key={t.turnKey}><strong>{t.speaker === "user" ? "You" : "ChatGPT"}</strong><MarkdownBody source={t.text} /></article>)}{s.gaps.map((gap) => <p key={gap}>{gap}</p>)}</section>)}</details>
         <details><summary>Timing and source details</summary><p>Latest session: {chatgptTimingLabel(selected.currentSession?.timing ?? selected.session.timing)}. This is separate from question time.</p><p>{selected.currentSession?.timing.evidence ?? selected.session.timing.evidence}</p><p>Session at this record revision: {chatgptTimingLabel(selected.session.timing)}</p><p>{selected.snapshot?.sourceDescription ?? "No bank snapshot supplied"}</p><p>{selected.attempt.kind} · {selected.attempt.mode} · {selected.attempt.outcome ?? "Result not supplied"}</p>{selected.attempt.timing.events.map((e, i) => <p key={i}>{e.command} · {e.at ?? "Time unknown"} · {e.evidence}</p>)}{selected.attempt.gaps.map((gap) => <p key={gap}>{gap}</p>)}<small>Record {selected.activityId} · {selected.fingerprint}</small></details>
