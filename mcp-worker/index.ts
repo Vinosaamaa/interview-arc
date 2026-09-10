@@ -4,6 +4,7 @@ import { ScopedMcpServer } from "./scoped-server";
 import { registerChatgptTools } from "./chatgpt-tools";
 import { registerEditorialTools } from "./editorial-tools";
 import { registerLeetcodeTools } from "./leetcode-tools";
+import { registerCodingTools } from "./coding-tools";
 import { registerDrawingTools } from "./drawing-tools";
 import { routeExcalidrawProxy } from "./excalidraw-proxy";
 import { resolveChatgptAccessOwner, type ChatgptAccessConfig } from "./chatgpt-access";
@@ -2616,6 +2617,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
   registerEditorialTools(server, env.DB, ownerId);
   if (chatgpt) registerChatgptTools(server, env.DB, ownerId, (activityId) => readCurrentPracticeDesignCheckpoint(ownerId, activityId, env.AUDIO));
   if (chatgpt) registerLeetcodeTools(server, env.AUDIO, ownerId);
+  if (chatgpt) registerCodingTools(server, env.DB, env.AUDIO, ownerId);
   if (chatgpt) registerDrawingTools(server, env.DB, env.AUDIO, ownerId);
 
   server.registerTool(
