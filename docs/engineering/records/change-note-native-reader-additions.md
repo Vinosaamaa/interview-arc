@@ -56,3 +56,9 @@ Snapshot tests preserve the newly loaded fields. An actual local app browser
 fixture with a competing remembered record verifies explicit selection,
 drawing controls and responsive geometry at 390px and 1440px. Production
 readback is required after release; the synthetic records remain for review.
+
+Hosted verification exposed an unrelated test watchdog shorter than the Java
+harness's own compiler budget: the outer 10-second process timeout killed a
+valid Quick run before the compiler's allowed 30 seconds. The test watchdog is
+now 45 seconds; production compiler and submitted-program limits are unchanged.
+All 20 focused Java harness checks pass, including bounded runtime failures.

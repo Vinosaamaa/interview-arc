@@ -20,7 +20,9 @@ function cli(args, env) {
     cwd: repoRoot,
     env,
     encoding: "utf8",
-    timeout: 10_000,
+    // Allow the harness's 30-second compiler budget plus JVM startup and the
+    // fixture runtime; a shorter outer watchdog killed valid runs on busy CI.
+    timeout: 45_000,
   });
 }
 
