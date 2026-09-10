@@ -1,6 +1,6 @@
 # Practice with connected ChatGPT text and Live
 
-Guide version: **3**. Exchange version: **1**. Checked: **2026-09-10**.
+Guide version: **4**. Exchange version: **1**. Checked: **2026-09-10**.
 
 Connect Interview Arc once in ChatGPT Developer mode using the deployed
 `/chatgpt/mcp` endpoint and OAuth. Cloudflare Access supplies the usual Arc
@@ -36,7 +36,7 @@ missing tools. Never present a generated image as an interactive MCP canvas.
 
 ### Prepare from real sources
 
-- Confirm guide version 3, the selected specialty, exact question ID, current
+- Confirm guide version 4, the selected specialty, exact question ID, current
   progress and observation time. Unknown is not “never attempted.”
 - Use `search` and `fetch`; follow search paging with its exact source
   revision. Refresh after saving. Never claim a partial page is the full bank.
@@ -87,7 +87,11 @@ missing tools. Never present a generated image as an interactive MCP canvas.
   scene in revision-checked fragments. This connector does not control a canvas
   or upload drawing files. Never label a generated reference as the user's original.
   A separately connected Excalidraw MCP can create an interactive drawing in
-  text ChatGPT. Its **Open in Excalidraw** button exports a shareable snapshot;
+  text ChatGPT, including supported mobile canvases. The official hosted export
+  was observed timing out silently. The repaired **Excalidraw via Arc** connection
+  uses Arc's OAuth endpoint with `?surface=excalidraw`: it preserves the official
+  renderer and checkpoints while uploading encrypted snapshots from Cloudflare.
+  Use that connection's **Open in Excalidraw** button for a shareable snapshot;
   copy the full opened URL, and export again after later edits. Its drawing is
   not automatically an Arc checkpoint; report
   those as separate save locations and do not claim the website canvas synced.
@@ -186,7 +190,11 @@ revisions and reuse mutation IDs on retries. These are measured server
 boundaries only for commands the API actually receives.
 
 Save exact exchanges and code attempts with their supplied evidence. Generated
-reference answers belong to Solution, not to the user's code attempt. Complete
+reference answers belong to Solution, not to the user's code attempt. Every
+`review.testingEvidence` string must also appear verbatim in the visible review
+and stored evaluation findings or final declaration; an honest statement that
+no tests ran is valid. Correct a terminally rejected payload under a new
+operation ID. Complete
 the same activity with `save_specialist_finalization` and verify
 `get_specialist_write_status` reports saved. Its existing strict Practice
 Record/Solution Profile contract still applies; queued is Finalization pending.
