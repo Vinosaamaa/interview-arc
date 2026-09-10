@@ -183,10 +183,12 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
       "upsert_behavioral_evidence_item",
       input,
     )));
-    await runScheduledRecovery(baseUrl);
     const concurrentReceipts = await waitForJobs(
       ownerClient,
       concurrentOperations.map((input) => input.operationId),
+      // Request drains process one job under an owner execution lease. A
+      // recovery tick can overlap that lease; model the recurring cron here.
+      baseUrl,
     );
     assert.deepEqual(concurrentReceipts.map((receipt) => receipt.status), ["saved", "saved"]);
     assert.deepEqual(
