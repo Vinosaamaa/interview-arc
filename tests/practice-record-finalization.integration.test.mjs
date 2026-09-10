@@ -343,6 +343,18 @@ test("complete finalization becomes saved only with an exact immutable Practice 
       INSERT INTO practice_record_revisions
         (owner_id,activity_id,revision,operation_id,request_fingerprint,record_fingerprint,payload,created_at)
       VALUES ('owner-practice-record','different-activity',1,'${storageCollisionJobId}','different-request','${"a".repeat(64)}','{}',1);
+      ${["leetcode", "system_design"].map(specialty => `
+      INSERT INTO extra_activities(owner_id,id,date,workbench_id,payload,revision,updated_at) SELECT owner_id,'deferred-${specialty}',date,workbench_id,
+        json_set(payload,'$.id','deferred-${specialty}','$.questionId','deferred-question-${specialty}','$.type','${specialty === "leetcode" ? "leetcode" : "systemDesign"}'),revision,updated_at
+        FROM extra_activities WHERE owner_id='owner-practice-record' AND id='${incompleteActivityId}';
+      INSERT INTO timers(owner_id,subject_id,kind,accumulated_seconds,started_at,running_since,completed,completed_at,revision,updated_at) SELECT owner_id,'deferred-${specialty}',kind,accumulated_seconds,started_at,running_since,completed,completed_at,revision,updated_at
+        FROM timers WHERE owner_id='owner-practice-record' AND subject_id='${incompleteActivityId}';
+      INSERT INTO outcomes(owner_id,activity_id,outcome,revision,updated_at) SELECT owner_id,'deferred-${specialty}',outcome,revision,updated_at
+        FROM outcomes WHERE owner_id='owner-practice-record' AND activity_id='${incompleteActivityId}';
+      INSERT INTO practice_transcript_turns(owner_id,activity_id,turn_id,specialty,speaker,body,source,sequence,occurred_at,updated_at)
+        SELECT owner_id,'deferred-${specialty}',turn_id||'-${specialty}','${specialty}',speaker,body,source,sequence,occurred_at,updated_at
+        FROM practice_transcript_turns WHERE owner_id='owner-practice-record' AND activity_id='${incompleteActivityId}';
+      `).join("\n")}
     `], project);
     const started = startMcpWorker({ wrangler, config, persistence, project, port });
     worker = started.child;
@@ -712,6 +724,40 @@ test("complete finalization becomes saved only with an exact immutable Practice 
     const incompleteReadback = await call(client, "get_activity_practice_record", { activityId: incompleteActivityId });
     assert.equal(incompleteReadback.practiceRecord, null);
     assert.equal(incompleteReadback.finalization, null);
+    for (const specialty of ["leetcode", "system_design"]) {
+      const deferred = {
+        activityId: `deferred-${specialty}`, specialty, questionId: `deferred-question-${specialty}`,
+        finalization: {
+          ...finalization.finalization, solutionProfileAction: "defer", solutionProfile: undefined,
+          solutionProfileDecision: { reason: "Reference research is unavailable; save the actual completed attempt now.", changedSections: [], researchPerformed: false, sourcesChecked: [] },
+          references: [], interactionModeClassificationOperationId: `deferred-mode-${specialty}`,
+          interactionModeEvidence: { schemaVersion: 1, provenance: "recorded", materialSpecialistTurnIds: [`specialist-practice-record-incomplete-${specialty}`], assistanceEvents: [] },
+          practiceRecord: { prompt: { body: "Explain the synthetic fixture.", canonicalUrl: "https://leetcode.com/problems/two-sum/" }, responseStages: [{key:"answer",state:"partially_answered",ownerResponse:"This activity has no semantic record sidecar.",mentorGuidance:"The incomplete packet must remain blocked.",finalUnderstanding:null,turnIds:[`user-practice-record-incomplete-${specialty}`,`specialist-practice-record-incomplete-${specialty}`]}] },
+        },
+      };
+      for (const invalidFields of [
+        { solutionProfileDecision: undefined },
+        { solutionProfile: finalization.finalization.solutionProfile },
+        { practiceRecord: undefined },
+      ]) {
+        const rejected = await callRaw(client, "save_specialist_finalization", {
+          ...deferred, finalization: { ...deferred.finalization, ...invalidFields, interactionModeClassificationOperationId: `invalid-${specialty}-${Object.keys(invalidFields)[0]}` },
+        });
+        assert.equal(rejected.isError, true);
+        assert.equal((await call(client, "get_activity_practice_record", { activityId: deferred.activityId })).practiceRecord, null);
+      }
+      const result = await call(client, "save_specialist_finalization", deferred);
+      const job = result.writeReceipt.status === "saved" ? result.writeReceipt : await settledJob(client, result.writeReceipt.jobId);
+      assert.equal(job.status,"saved");
+      const record = await call(client,"get_activity_practice_record",{activityId:deferred.activityId});
+      assert.equal(record.practiceRecord.payload.solutionLink,null);
+      assert.equal(record.practiceRecord.payload.referencePending.reason,deferred.finalization.solutionProfileDecision.reason);
+      assert.equal(record.finalization.status,"ready");
+      const replay = await call(client,"save_specialist_finalization",deferred);
+      assert.equal(replay.writeReceipt.status,"saved");
+      assert.equal((await call(client,"get_activity_practice_record",{activityId:deferred.activityId})).practiceRecord.revision,1);
+      assert.equal((await call(otherClient,"get_activity_practice_record",{activityId:deferred.activityId})).practiceRecord,null);
+    }
   } finally {
     await otherClient?.close().catch(() => {});
     await client?.close().catch(() => {});

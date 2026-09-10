@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { canonicalJson, importFingerprint } from "./chatgpt-import-policy.ts";
+import { completedPracticeTargets } from "./practice-addition-target.ts";
 
 type Database = Pick<D1Database, "prepare" | "batch">;
 const id = z.string().trim().min(1).max(240);
@@ -37,13 +38,12 @@ export async function savePracticeEditorial(db: Database, owner: string, value: 
   }
   const prior = await replay();
   if (prior) return prior;
-  const record = await db.prepare(`SELECT payload FROM chatgpt_import_records WHERE ${eligiblePractice}`)
-    .bind(owner, input.activityId, input.questionId).first<{ payload: string }>();
+  const record = await db.prepare(`SELECT canonical_url FROM ${completedPracticeTargets} WHERE ${eligiblePractice}`)
+    .bind(owner, input.activityId, input.questionId).first<{ canonical_url: string | null }>();
   if (!record) {
-    throw new Error("Choose a completed imported LeetCode practice record belonging to this owner and question.");
+    throw new Error("Choose a completed LeetCode Practice Record belonging to this owner and question.");
   }
-  const original = JSON.parse(record.payload) as { attempt: { question: { url: string | null } } };
-  const problemPath = /^https:\/\/leetcode\.com\/problems\/([a-z0-9-]+)(?:\/|$)/.exec(original.attempt.question.url ?? "");
+  const problemPath = /^https:\/\/leetcode\.com\/problems\/([a-z0-9-]+)(?:\/|$)/.exec(record.canonical_url ?? "");
   if (!problemPath || input.editorialUrl.replace(/\/$/, "") !== `https://leetcode.com/problems/${problemPath[1]}/editorial`) {
     throw new Error("The editorial URL must match the original practice problem URL.");
   }
@@ -53,8 +53,8 @@ export async function savePracticeEditorial(db: Database, owner: string, value: 
     await db.batch([
       // Invalid JSON raises a SQLite error and rolls back the batch on conflict.
       db.prepare(`SELECT json(CASE WHEN COALESCE((SELECT MAX(revision) FROM practice_editorial_additions WHERE owner_id = ? AND activity_id = ?), 0) = ?
-        AND EXISTS(SELECT 1 FROM chatgpt_import_records WHERE ${eligiblePractice})
-        THEN 'true' ELSE 'editorial_conflict' END)`).bind(owner, input.activityId, input.expectedRevision, owner, input.activityId, input.questionId),
+        AND EXISTS(SELECT 1 FROM ${completedPracticeTargets} WHERE ${eligiblePractice} AND canonical_url=?)
+        THEN 'true' ELSE 'editorial_conflict' END)`).bind(owner, input.activityId, input.expectedRevision, owner, input.activityId, input.questionId, record.canonical_url),
       db.prepare("INSERT INTO practice_editorial_additions(owner_id, activity_id, revision, operation_id, request_fingerprint, payload, created_at) VALUES(?,?,?,?,?,?,?)")
         .bind(owner, input.activityId, editorial.revision, input.operationId, fingerprint, payload, now),
     ]);

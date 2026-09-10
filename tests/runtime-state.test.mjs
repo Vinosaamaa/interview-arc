@@ -736,7 +736,7 @@ test("durable publishing keeps transcripts, review, notes, and four-day walkthro
   assert.match(bridge, /const specialistSolutionProfileSchema = z\.object/);
   assert.match(bridge, /solutionProfile: specialistSolutionProfileSchema\.optional\(\)/);
   assert.match(bridge, /profile: specialistSolutionProfileSchema/);
-  assert.match(bridge, /solutionProfileAction: z\.enum\(\["create_or_revise", "reuse_current"\]\)/);
+  assert.match(bridge, /solutionProfileAction: z\.enum\(\["create_or_revise", "reuse_current", "defer"\]\)/);
   assert.match(bridge, /questionMetadata: leetCodeQuestionMetadataSchema\.optional\(\)/);
   assert.match(bridge, /input\.specialty !== "leetcode" && input\.finalization\.questionMetadata/);
   assert.match(bridge, /behavioralAnswer: z\.object/);

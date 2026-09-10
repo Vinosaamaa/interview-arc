@@ -20,7 +20,7 @@ type ReaderPayload = {
     designAssetIds: string[];
   };
   references: Array<unknown>;
-  solutionLink: { profileRevision: number };
+  solutionLink: { profileRevision: number } | null;
   assetLinks: Array<unknown>;
   finalizationOperationId: string;
 };
@@ -67,7 +67,7 @@ export function practiceRecordTechnicalAudit(receipt: {
     firstTurnId: receipt.payload.transcript.firstTurnId,
     lastTurnId: receipt.payload.transcript.lastTurnId,
     notesRevision: receipt.payload.notesRevision,
-    solutionRevisionAtCompletion: receipt.payload.solutionLink.profileRevision,
+    solutionRevisionAtCompletion: receipt.payload.solutionLink?.profileRevision ?? null,
     codeAttemptCount: receipt.payload.specialtyOutput.codeAttemptIds.length,
     assetCount: receipt.payload.assetLinks.length,
     referenceCount: receipt.payload.references.length,

@@ -4419,7 +4419,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
             accessedAt: z.string().min(1),
           })),
           questionMetadata: leetCodeQuestionMetadataSchema.optional(),
-          solutionProfileAction: z.enum(["create_or_revise", "reuse_current"]).optional(),
+          solutionProfileAction: z.enum(["create_or_revise", "reuse_current", "defer"]).describe("Use defer for completed coding/design practice when its reference is unavailable; provide solutionProfileDecision.reason and omit solutionProfile. Existing profiles must be reused/revised. This saves the attempt with an explicitly pending reference, retaining all transcript and review requirements.").optional(),
           solutionProfileDecision: z.object({
             reason: z.string().min(1),
             changedSections: z.array(z.string()),

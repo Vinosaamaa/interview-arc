@@ -34,6 +34,13 @@ parity is proven. Never rewrite Git history.
 - A Practice Record stores the exact Solution Profile revision used at
   completion. The primary reader action resolves the newest current revision;
   Technical Audit may open the historical revision.
+- Explicit `solutionProfileAction: defer` may complete coding/design practice
+  without a profile when none exists. Store a null solution link and the supplied
+  pending-reference reason; retain all other completion and readback checks.
+  Never use deferral to remove an existing link or weaken a complete profile.
+- Native and imported completed records may receive separately revisioned
+  editorial/drawing additions. Preserve the original practice revision, source
+  turns, outcome and timing. These additions do not promote a Solution Profile.
 - A new profile revision never creates a Past row. A record without an exact
   completed activity never becomes an attempt.
 - Attempt evidence never moves into a reusable profile merely to fill a gap.
