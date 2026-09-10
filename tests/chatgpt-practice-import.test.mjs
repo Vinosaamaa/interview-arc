@@ -208,3 +208,36 @@ test("transaction failure rolls back earlier source and record statements, and f
     assert.deepEqual((await save(db, "bob", input)).records, receipt.records);
   } finally { sqlite.close(); }
 });
+
+test("expanded evidence is rejected during preview before any D1 row can exceed its limit", async () => {
+  const { db, sqlite } = database();
+  try {
+    const value = fixture();
+    value.sources[0].turns.forEach((t) => t.text = "x".repeat(95000));
+    assert.ok(Buffer.byteLength(JSON.stringify(value)) < 1000000);
+    await assert.rejects(prepareChatgptImport(db, "alice", request(value), catalog), (e) => e.status === 413);
+    assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM chatgpt_import_packets").get().n, 0);
+  } finally { sqlite.close(); }
+});
+
+test("separately supplied source chunks cannot reverse previously recorded timestamps", async () => {
+  const { db, sqlite } = database();
+  try {
+    const first = fixture();
+    first.sources[0].turns.at(-1).occurredAt = "2026-09-08T12:00:00Z";
+    first.sources[0].turns.at(-1).timestampBasis = "platform_export";
+    await save(db, "alice", request(first));
+    const next = fixture(); next.packetId = "later-source-chunk"; next.sessions[0].sessionKey = "later-session";
+    next.sources[0].turns = [{ turnKey: "new-turn", sequence: 11, speaker: "user", text: "New supplied turn", occurredAt: "2026-09-08T11:00:00Z", timestampBasis: "platform_export" }];
+    next.sessions[0].attempts = [{ ...next.sessions[0].attempts[0], attemptKey: "later-attempt", turnKeys: ["new-turn"] }];
+    await assert.rejects(prepareChatgptImport(db, "alice", request(next), catalog), /previously saved conversation order/);
+  } finally { sqlite.close(); }
+});
+
+test("many independent sessions are bounded before exceeding the worker query budget", () => {
+  const value = fixture();
+  value.sessions = Array.from({ length: 100 }, (_, i) => ({ ...value.sessions[0], sessionKey: `session-${i}`, attempts: [{ ...value.sessions[0].attempts[0], attemptKey: `attempt-${i}` }] }));
+  const result = chatgptExportSchema.safeParse(value);
+  assert.equal(result.success, false);
+  assert.ok(result.error.issues.some((i) => i.message.includes("fewer sessions")));
+});
