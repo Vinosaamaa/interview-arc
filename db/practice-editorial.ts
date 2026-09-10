@@ -17,6 +17,7 @@ export const practiceEditorialSchema = z.object({
 }).strict();
 export type PracticeEditorial = z.infer<typeof practiceEditorialSchema> & { revision: number; createdAt: number };
 type Stored = { request_fingerprint: string; payload: string };
+const eligiblePractice = "owner_id = ? AND activity_id = ? AND question_id = ? AND specialty = 'leetcode' AND status = 'completed'";
 
 export async function readPracticeEditorial(db: Database, owner: string, activityId: string, revision?: number): Promise<PracticeEditorial | null> {
   const row = await db.prepare(`SELECT payload FROM practice_editorial_additions WHERE owner_id = ? AND activity_id = ?${revision === undefined ? " ORDER BY revision DESC LIMIT 1" : " AND revision = ?"}`)
@@ -36,9 +37,9 @@ export async function savePracticeEditorial(db: Database, owner: string, value: 
   }
   const prior = await replay();
   if (prior) return prior;
-  const record = await db.prepare("SELECT question_id, specialty, status, payload FROM chatgpt_import_records WHERE owner_id = ? AND activity_id = ?")
-    .bind(owner, input.activityId).first<{ question_id: string; specialty: string; status: string; payload: string }>();
-  if (!record || record.specialty !== "leetcode" || record.status !== "completed" || record.question_id !== input.questionId) {
+  const record = await db.prepare(`SELECT payload FROM chatgpt_import_records WHERE ${eligiblePractice}`)
+    .bind(owner, input.activityId, input.questionId).first<{ payload: string }>();
+  if (!record) {
     throw new Error("Choose a completed imported LeetCode practice record belonging to this owner and question.");
   }
   const original = JSON.parse(record.payload) as { attempt: { question: { url: string | null } } };
@@ -51,7 +52,7 @@ export async function savePracticeEditorial(db: Database, owner: string, value: 
   try {
     await db.batch([
       db.prepare(`SELECT json(CASE WHEN COALESCE((SELECT MAX(revision) FROM practice_editorial_additions WHERE owner_id = ? AND activity_id = ?), 0) = ?
-        AND EXISTS(SELECT 1 FROM chatgpt_import_records WHERE owner_id = ? AND activity_id = ? AND question_id = ? AND specialty = 'leetcode' AND status = 'completed')
+        AND EXISTS(SELECT 1 FROM chatgpt_import_records WHERE ${eligiblePractice})
         THEN 'true' ELSE 'editorial_conflict' END)`).bind(owner, input.activityId, input.expectedRevision, owner, input.activityId, input.questionId),
       db.prepare("INSERT INTO practice_editorial_additions(owner_id, activity_id, revision, operation_id, request_fingerprint, payload, created_at) VALUES(?,?,?,?,?,?,?)")
         .bind(owner, input.activityId, editorial.revision, input.operationId, fingerprint, payload, now),

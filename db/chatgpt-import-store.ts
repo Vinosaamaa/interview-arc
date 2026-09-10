@@ -22,8 +22,12 @@ export async function readImportedPractice(db: Database, owner: string, activity
       WHERE r.owner_id = ? AND r.activity_id = ? AND v.revision = ?`).bind(owner, activityId, revision).first<Stored>();
   if (!row) return null;
   const record = parseRecord(row);
-  const session = await db.prepare("SELECT payload FROM chatgpt_import_sessions WHERE owner_id = ? AND session_key = ?").bind(owner, record.session.sessionKey).first<{ payload: string }>();
-  return { ...record, editorial: await readPracticeEditorial(db, owner, activityId), ...(session ? { currentSession: JSON.parse(session.payload) as NonNullable<ImportedPractice["currentSession"]> } : {}) };
+  const [session, editorial] = await Promise.all([
+    db.prepare("SELECT payload FROM chatgpt_import_sessions WHERE owner_id = ? AND session_key = ?").bind(owner, record.session.sessionKey).first<{ payload: string }>(),
+    // Historical pending revisions can belong to a now-completed coding record.
+    record.attempt.question.specialty === "leetcode" ? readPracticeEditorial(db, owner, activityId) : null,
+  ]);
+  return { ...record, editorial, ...(session ? { currentSession: JSON.parse(session.payload) as NonNullable<ImportedPractice["currentSession"]> } : {}) };
 }
 export async function listImportedPractice(db: Database, owner: string, offset = 0, status: "completed" | "pending" = "completed") {
   const rows = await db.prepare(`SELECT activity_id, revision, fingerprint, status, specialty, question_id, practice_date,
