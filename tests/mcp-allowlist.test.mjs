@@ -11,12 +11,16 @@ import {
 const repositoryRoot = new URL("../", import.meta.url);
 
 test("the repository MCP allowlist matches the Worker registration catalog in order", async () => {
-  const [workerSource, repositoryConfig] = await Promise.all([
+  const [workerSource, editorialSource, repositoryConfig] = await Promise.all([
     readFile(new URL("mcp-worker/index.ts", repositoryRoot), "utf8"),
+    readFile(new URL("mcp-worker/editorial-tools.ts", repositoryRoot), "utf8"),
     readFile(new URL(".codex/config.toml", repositoryRoot), "utf8"),
   ]);
 
-  assert.deepEqual(parseEnabledTools(repositoryConfig), parseRegisteredTools(workerSource));
+  assert.deepEqual(parseEnabledTools(repositoryConfig), [
+    ...parseRegisteredTools(workerSource),
+    ...parseRegisteredTools(editorialSource),
+  ]);
 });
 
 test("the optional outer workspace shim stays aligned without making CI depend on it", async () => {

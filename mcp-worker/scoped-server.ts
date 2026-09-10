@@ -5,6 +5,8 @@ import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 // The authenticated ChatGPT surface reuses the existing practice handlers.
 // New tools are excluded until explicitly reviewed for this connection.
 export const CHATGPT_PRACTICE_TOOLS = new Set([
+  "backfill_practice_editorial", "get_practice_editorial",
+  "upsert_behavioral_evidence_item", "query_behavioral_evidence_candidates", "review_behavioral_evidence_candidates", "set_behavioral_claim_status",
   "search", "fetch", "create_practice_question", "preview_practice_backfill", "apply_practice_backfill", "get_practice_backfill_receipt",
   "get_practice_interaction_mode", "set_practice_interaction_mode", "save_practice_exchange",
   "get_problem_solution_profile", "get_activity_practice_record", "add_practice_note", "schedule_practice_review",

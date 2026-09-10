@@ -2,6 +2,7 @@ import {
   canonicalJson, importFingerprint,
   type ChatgptExport, type ChatgptImportRequest, type ImportedPractice, type ImportPreview,
 } from "./chatgpt-import-policy.ts";
+import { readPracticeEditorial } from "./practice-editorial.ts";
 
 // This adapter accepts a D1 binding so its actual SQL/transaction behavior can
 // be tested without booting unrelated specialist services.
@@ -22,7 +23,7 @@ export async function readImportedPractice(db: Database, owner: string, activity
   if (!row) return null;
   const record = parseRecord(row);
   const session = await db.prepare("SELECT payload FROM chatgpt_import_sessions WHERE owner_id = ? AND session_key = ?").bind(owner, record.session.sessionKey).first<{ payload: string }>();
-  return { ...record, ...(session ? { currentSession: JSON.parse(session.payload) as NonNullable<ImportedPractice["currentSession"]> } : {}) };
+  return { ...record, editorial: await readPracticeEditorial(db, owner, activityId), ...(session ? { currentSession: JSON.parse(session.payload) as NonNullable<ImportedPractice["currentSession"]> } : {}) };
 }
 export async function listImportedPractice(db: Database, owner: string, offset = 0, status: "completed" | "pending" = "completed") {
   const rows = await db.prepare(`SELECT activity_id, revision, fingerprint, status, specialty, question_id, practice_date,

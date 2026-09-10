@@ -14,7 +14,27 @@ versions instead of guessing. The examples are entirely synthetic:
 - [Selected public bank](chatgpt-bank-synthetic.example.json)
 - [Voice plus text session export](chatgpt-backfill-synthetic.example.json)
 
-## Bank input
+## Later editorial additions
+
+`backfill_practice_editorial` appends an independent immutable research revision
+to a completed imported LeetCode record. `get_practice_editorial` reads the latest
+or an exact addition revision. Both authenticated MCP surfaces expose these
+operations. The practice reader displays the latest addition separately,
+including when viewing an older practice revision; it is explicitly later
+research, never evidence that was available during the attempt.
+
+The owner and exact question must match the saved import. The editorial URL
+must match its recorded LeetCode problem URL. Each write supplies an operation
+ID, expected addition revision, actual research source, access time, content
+SHA256, approach titles and an original explanation. Same-operation retries
+replay; changed-operation content and stale revisions fail. Content fingerprints
+are supplied provenance, not proof that the server independently fetched the page.
+The atomic addition and readback do not mutate imported source turns, practice
+revisions, result, time, day, or current Solution Profiles. Community/generated
+solutions are not accepted as an official-editorial access receipt. Reference
+generation and automatic Solution Profile promotion remain out of scope.
+
+## Bank retrieval
 
 The connected workflow uses authenticated MCP `search` and `fetch` at the
 separate `/chatgpt/mcp` surface. It reads the same current owner-private bank

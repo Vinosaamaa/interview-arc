@@ -5,6 +5,7 @@ import test from "node:test";
 import { chatgptExportSchema, chatgptImportRequestSchema, chatgptTimingSchema } from "../db/chatgpt-import-policy.ts";
 import { applyChatgptImport, prepareChatgptImport, readImportedPractice, listImportedPractice } from "../db/chatgpt-import-store.ts";
 import { readChatgptBank } from "../db/chatgpt-bank.ts";
+import { savePracticeEditorial, readPracticeEditorial } from "../db/practice-editorial.ts";
 
 const sample = JSON.parse(readFileSync(new URL("../docs/contracts/chatgpt-backfill-synthetic.example.json", import.meta.url), "utf8"));
 function fixture() {
@@ -36,6 +37,41 @@ async function save(db, owner, input) {
   const { preview } = await prepareChatgptImport(db, owner, input, catalog);
   return applyChatgptImport(db, owner, { ...input, action: "apply", previewToken: preview.previewToken, confirmCorrections: true }, catalog);
 }
+
+test("later editorial revisions preserve imported evidence, validate owner/problem, and replay atomically", async () => {
+  const { db, sqlite } = database();
+  try {
+    const packet = fixture();
+    const coding = packet.sessions[0].attempts.find((a) => a.question.specialty === "leetcode");
+    coding.question.url = "https://leetcode.com/problems/two-sum/";
+    const receipt = await save(db, "alice", request(packet));
+    const record = receipt.records.find((r) => r.attempt.question.specialty === "leetcode");
+    const original = sqlite.prepare("SELECT * FROM chatgpt_import_records").all();
+    const originalRevisions = sqlite.prepare("SELECT * FROM chatgpt_import_revisions").all();
+    const input = { operationId: "editorial-one", activityId: record.activityId, questionId: record.questionId,
+      expectedRevision: 0, source: "owner_supplied", editorialUrl: "https://leetcode.com/problems/two-sum/editorial/",
+      accessedAt: "2026-09-10T00:00:00Z", contentSha256: "a".repeat(64), approachTitles: ["Hash table"],
+      explanation: "Synthetic original explanation of the observed hash-table approach." };
+    const saved = await savePracticeEditorial(db, "alice", input, 1);
+    assert.equal(saved.editorial.revision, 1);
+    assert.equal((await savePracticeEditorial(db, "alice", input, 2)).duplicate, true);
+    assert.equal(await readPracticeEditorial(db, "bob", record.activityId), null);
+    await assert.rejects(savePracticeEditorial(db, "bob", input), /belonging to this owner/);
+    await assert.rejects(savePracticeEditorial(db, "alice", { ...input, explanation: "Different explanation with the same operation." }), /different content/);
+    await assert.rejects(savePracticeEditorial(db, "alice", { ...input, operationId: "wrong-question", questionId: "wrong" }), /belonging to this owner/);
+    await assert.rejects(savePracticeEditorial(db, "alice", { ...input, operationId: "wrong-url", editorialUrl: "https://leetcode.com/problems/three-sum/editorial/" }), /must match/);
+    await assert.rejects(savePracticeEditorial(db, "alice", { ...input, operationId: "stale" }), /not confirmed/);
+    assert.equal(sqlite.prepare("SELECT count(*) n FROM practice_editorial_additions").get().n, 1);
+    const changed = { ...input, operationId: "editorial-two", expectedRevision: 1, explanation: "Corrected synthetic explanation with the same evidence source." };
+    const lossyTransport = { ...db, async batch(statements) { await db.batch(statements); throw new Error("lost response"); } };
+    assert.equal((await savePracticeEditorial(lossyTransport, "alice", changed)).editorial.revision, 2);
+    assert.equal((await readPracticeEditorial(db, "alice", record.activityId, 1)).explanation, input.explanation);
+    assert.equal((await readImportedPractice(db, "alice", record.activityId)).editorial.explanation, changed.explanation);
+    assert.deepEqual(sqlite.prepare("SELECT * FROM chatgpt_import_records").all(), original);
+    assert.deepEqual(sqlite.prepare("SELECT * FROM chatgpt_import_revisions").all(), originalRevisions);
+    assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM timers").get().n, 0);
+  } finally { sqlite.close(); }
+});
 
 test("transport validates supplied example and rejects broken evidence, state and dates", () => {
   assert.equal(chatgptExportSchema.safeParse(sample).success, true);
