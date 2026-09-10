@@ -1,25 +1,29 @@
 # ChatGPT practice exchange v1
 
-**Draft transport contract, not a deployed importer.** Owns the files produced
+**Versioned transport and historical import contract.** Owns the files produced
 by the [practice guide](../agents/chatgpt-practice-prompt.md).
 Issue [#453](https://github.com/Vinosaamaa/interview-arc/issues/453);
 PR [#454](https://github.com/Vinosaamaa/interview-arc/pull/454).
 
 The [JSON Schema](chatgpt-practice-exchange.schema.json) accepts two document
 kinds: `bank_snapshot` and `practice_export`, each with `schemaVersion: 1`.
-This v1 is being designed in this PR; prior draft shapes are superseded.
-Once adopted, an incompatible change requires a new version. Reject unsupported
+This v1 ships with PR #454; deployment is a separate release gate. Prior draft
+shapes are superseded. An incompatible change requires a new version. Reject unsupported
 versions instead of guessing. The examples are entirely synthetic:
 
 - [Selected public bank](chatgpt-bank-synthetic.example.json)
 - [Voice plus text session export](chatgpt-backfill-synthetic.example.json)
 
-## A practical bank input today
+## Bank input
 
 A user can paste selected catalog/status rows or upload existing bank JSON.
 ChatGPT may normalize them to this snapshot, retaining exactly what was supplied.
-An authenticated owner can prepare a file; this contract does not imply an
-existing snapshot endpoint, download button or authorized ChatGPT connection.
+An authenticated owner downloads a snapshot from **Past → ChatGPT practice**.
+`GET /api/chatgpt-practice?bank=1&download=1` reads current public catalog and
+owner-private questions, durable completed activities/imports and scheduled
+reviews. Optional `specialty` returns a selected snapshot. The response is
+private/no-store and contains no credential or owner identifier. This is a
+browser-session download, not a public or authenticated ChatGPT REST connection.
 
 | Field | Meaning |
 | --- | --- |
@@ -143,8 +147,9 @@ unknown stays null. Preserve actual offsets across daylight saving and midnight.
 
 ## Owner backfill boundary
 
-These are requirements for future implementation or an explicitly authorized
-owner review, not permission to mutate a database. Before saving:
+The authenticated website implements preview and Apply at
+`POST /api/chatgpt-practice`. It requires same-origin JSON and independently
+resolved owner identity. Before saving:
 
 1. Validate schema, bounded input, referenced IDs, chronological ordering,
    command transitions, timing arithmetic and result evidence. JSON Schema
@@ -161,9 +166,9 @@ owner review, not permission to mutate a database. Before saving:
    explicit correction review. Changing only packet ID must not bypass dedupe.
    Partial checkpoints are retained as draft evidence, never published as a
    completed attempt; later completion is an explicit revision of that draft.
-4. After authorized Apply, persist through the
+4. After authorized Apply, persist under the historical-import extension of the
    [owner-private finalization contract](owner-private-practice-records.md),
-   with immutable revisions, expected-revision checks and durable retry receipts.
+   with immutable revisions, expected-fingerprint checks and durable retry receipts.
    Never attach silently to Today's active session, rewrite a running timer,
    recreate a deleted target or overwrite a Solution Profile.
 5. Read back exact accepted IDs/revisions/hashes before claiming saved. Preserve
@@ -175,10 +180,40 @@ into an exact live timer or invent completion timestamps to satisfy current
 schemas. Missing timing alone need not block evidence capture, but missing
 fields required by canonical finalization remain visibly pending.
 
-This PR provides the guide, research, schema and synthetic examples only.
-It adds no snapshot service, preview/apply endpoint, import identity mapping,
-historical timing projection or deployed writer. `app/api/practice-record/route.ts`
-is a GET route, not this importer. Runtime acceptance must later prove retries,
-changed-content conflicts, owner isolation, question resolution, truncated
-sources, estimated/unknown timing, pause arithmetic, midnight handling and
-unchanged Today timers. Documentation/schema validation cannot establish those.
+## Runtime representation and limits
+
+`chatgpt_import_packets` retains the exact parsed source packet and receipt;
+`chatgpt_import_sources` retains the append-only union of original turns.
+`chatgpt_import_sessions` holds the latest reviewed source-session state.
+`chatgpt_import_revisions` owns immutable historical activity evidence;
+`chatgpt_import_records` is its current pointer and bounded Past index. The
+server assigns activity IDs and hashes. Apply batches all writes atomically,
+checks old fingerprints inside the transaction, then rereads exact revisions.
+An ambiguous write is recovered through its receipt. Changing packet ID alone
+does not duplicate an attempt. Source identity conflicts cannot be corrected
+by overwriting text or moving a turn to another chat.
+
+Completed historical imports require an active exact bank match, Pacific date,
+finished question state and source turns. Actual attempts need an affirmative
+attempt flag; coding attempts also need a result with referenced evidence.
+Walkthroughs remain labeled walkthroughs. Summary-only, unfinished, discussion,
+unresolved and duplicate-question evidence is pending and does not affect
+completed progress. A same-day second source attempt is retained for explicit
+reconciliation; v1 does not merge it into an existing live/specialist record.
+Resolve missing questions/dates in the preview; source/result corrections
+come from a new source-preserving export. Previously resolved identities remain
+stable on later daily exports. Finished source sessions cannot resume.
+
+The historical reader shares Arc's Markdown/code renderer, suppresses automatic
+remote-image loading, and displays original prompt, review, linked source
+turns, gaps and timing basis. It shows current session timing separately from
+the session snapshot at the immutable record revision. `GET` with `activityId`
+and optional `revision` reads exact owner-scoped content; default `GET` pages
+50 completed records, or pending evidence with `status=pending`.
+
+Requests are bounded to 1 MB, 100 attempts and 2,000 source turns. Accumulated
+source captures are bounded to 1.5 MB; use a new source key for a subsequent
+range when necessary. Split large daily exports into session packets. Runtime
+semantic validation supplements the transport schema with graph, timing,
+identity and current-bank checks. Estimated/unknown time never enters live
+timer tables, and session totals never inflate question or daily totals.

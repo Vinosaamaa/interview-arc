@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:interview-arc:chatgpt-practice-exchange:1",
-  "title": "ChatGPT practice exchange v1 (draft; no runtime importer)",
+  "title": "ChatGPT practice exchange v1",
   "oneOf": [{"$ref":"#/$defs/bank"},{"$ref":"#/$defs/export"}],
   "$defs": {
     "key": {"type":"string","minLength":1,"maxLength":160,"pattern":"^[a-z0-9][a-z0-9._:-]*$"},

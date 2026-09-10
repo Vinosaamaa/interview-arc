@@ -57,13 +57,15 @@ D1/R2 under the [existing contract](../contracts/owner-private-practice-records.
 `app/api/content-index/route.ts` is behind the website Access gate;
 `app/api/state/route.ts` resolves an owner; `app/api/practice-record/route.ts`
 is an owner-scoped GET. `mcp-worker/` also exists. These are application
-interfaces, not evidence of ChatGPT compatibility or a snapshot/import feature.
+interfaces, not evidence of ChatGPT compatibility.
 
-Today: read the catalog, optionally copy selected private status from the
-authenticated UI, or use an already tested read-only text integration.
-An owner can prepare the small snapshot in the [contract](../contracts/chatgpt-practice-backfill.md).
-No new export endpoint is assumed. Refresh after backfill or when current
-status matters; offline status is dated evidence, never live state.
+PR #454 implements an authenticated **Past → ChatGPT practice** bank download
+and preview/apply importer under `/api/chatgpt-practice`. After deployment,
+download the private JSON bank, attach it in text ChatGPT alongside the guide,
+and switch to Live in the same chat. This file handoff is the default approach;
+it does not depend on a Live REST call. Refresh the file after backfill or when
+current status matters. GitHub catalogs remain a metadata-only fallback.
+The account's text-to-Live context handoff still needs an account test.
 
 ## Timing
 

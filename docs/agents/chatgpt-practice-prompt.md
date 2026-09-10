@@ -1,11 +1,12 @@
 # Practice with regular ChatGPT text or Live Voice
 
-Guide version: **1**. Exchange version: **1 (draft)**. Checked: **2026-09-09**.
+Guide version: **1**. Exchange version: **1**. Checked: **2026-09-09**.
 
 Start in regular text ChatGPT at chatgpt.com or its mobile app. Load this guide,
 then keep typing or select **Live** in Settings → Voice and speak in the same
-chat. This workflow captures practice for later backfill. It does not save to
-Interview Arc, and this PR does not install an importer.
+chat. After practice, export the session in text and import it in Interview Arc
+under **Past → ChatGPT practice**. ChatGPT itself does not save to Arc.
+The importer ships with PR #454; it becomes available after that PR is deployed.
 
 ## Start here
 
@@ -25,9 +26,9 @@ proof of repository or authenticated website access.
 | What you need | What to supply today |
 | --- | --- |
 | Repository questions | The relevant file below through GitHub or uploaded/pasted in text. These catalogs do not contain current personal progress. |
-| Current attempted/review status | Selected rows copied from authenticated Interview Arc, or fetched by an already configured and tested read-only text integration. Include when checked if known. |
+| Current attempted/review status | In authenticated Arc, open **Past → ChatGPT practice → Download private bank**. Attach that JSON file in this text conversation. It includes current durable completed-practice counts, latest coding results and review dates at its recorded observation time. |
 | A single question | Exact bank ID and specialty if known, title, public URL and available prompt. An unknown bank ID stays null for owner resolution. |
-| A prepared file | A v1 `bank_snapshot` from the linked contract, or ordinary JSON/text normalized with its source preserved. No special export button is required. |
+| A prepared file | The downloaded v1 `bank_snapshot`, or ordinary JSON/text normalized with its source preserved. Selected pasted rows remain a fallback. |
 
 Repository banks:
 
@@ -139,8 +140,16 @@ Save each Finish packet privately. Supply those packets in a text chat and say:
 > and results. List sessions I mention but have not supplied. Do not reconstruct
 > other chats from memory or invent a total when time is unknown or overlapping.
 
-Hand the file to the Interview Arc owner for review and backfill. The
-[contract](../contracts/chatgpt-practice-backfill.md) defines future import;
-a schema-valid file is not a saved Practice Record. The
+In Arc, open **Past → ChatGPT practice**, choose or paste the export and select
+**Preview import**. Review the questions, dates, gaps and timing. Resolve any
+missing bank question or Pacific date, preview again, then **Save reviewed
+import**. Completed imports appear in Past; incomplete evidence stays under
+Pending imports, where **Resolve this import** starts an explicit revision.
+Keep session packets below 1 MB, with at most 100 attempts and 2,000 source
+turns. Split larger days into session packets, retaining stable identities.
+Exact retries return the saved receipt; corrections need a new packet ID and
+explicit revision confirmation. Do not modify original source text.
+The [contract](../contracts/chatgpt-practice-backfill.md) defines the import;
+a schema-valid file alone is not a saved record. The
 [research](../architecture/chatgpt-live-capabilities.md) separates documented
 capabilities from routes still needing an account test.

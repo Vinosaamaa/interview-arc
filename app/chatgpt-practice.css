@@ -1,0 +1,49 @@
+.chatgpt-practice { margin: 16px 0; min-width: 0; color: var(--ink, #102a2a); }
+.chatgpt-practice *, .chatgpt-practice *::before, .chatgpt-practice *::after { box-sizing: border-box; min-width: 0; }
+.chatgpt-import-editor, .chatgpt-import-history, .chatgpt-import-pending { padding: 18px 22px; border: 1px solid #c8d8d3; border-radius: 14px; background: #fbfcfa; }
+.chatgpt-import-editor > summary { cursor: pointer; font-size: 17px; font-weight: 650; }
+.chatgpt-import-editor > summary small { margin-left: 14px; font-size: 14px; font-weight: 400; color: #617470; }
+.chatgpt-import-flow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 28px; padding-top: 22px; }
+.chatgpt-import-handoff { border-left: 3px solid #0d9488; padding-left: 18px; }
+.chatgpt-practice h3 { margin: 0 0 12px; font-size: 20px; }
+.chatgpt-practice h4 { margin: 0; font-size: 17px; }
+.chatgpt-practice p { font-size: 15px; line-height: 1.6; overflow-wrap: anywhere; }
+.chatgpt-practice .chatgpt-import-note { color: #617470; font-size: 14px; }
+.chatgpt-practice button, .chatgpt-import-actions a { border: 1px solid #c8d8d3; border-radius: 8px; background: #edf3f1; color: #0f5f5a; padding: 10px 14px; font: inherit; font-size: 14px; cursor: pointer; text-decoration: none; }
+.chatgpt-practice button:disabled { opacity: .55; cursor: wait; }
+.chatgpt-practice :focus-visible { outline: 3px solid #0d9488; outline-offset: 3px; }
+.chatgpt-import-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.chatgpt-practice label { display: grid; gap: 7px; font-size: 14px; margin-bottom: 12px; }
+.chatgpt-practice textarea, .chatgpt-practice select, .chatgpt-practice input:not([type=checkbox]) { width: 100%; border: 1px solid #c8d8d3; border-radius: 8px; padding: 10px; background: #fff; color: #102a2a; font: inherit; }
+.chatgpt-practice textarea { resize: vertical; font-size: 14px; font-family: var(--font-geist-mono, monospace); }
+.chatgpt-import-preview { border-top: 1px solid #c8d8d3; margin-top: 24px; padding-top: 22px; }
+.chatgpt-import-preview article { margin: 16px 0; padding: 16px 0; border-bottom: 1px solid #c8d8d3; }
+.chatgpt-import-preview header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; }
+.chatgpt-import-preview header span { font-size: 14px; color: #617470; }
+.chatgpt-import-fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; }
+.chatgpt-practice .chatgpt-import-confirm { display: flex; align-items: center; gap: 10px; margin: 16px 0; }
+.chatgpt-practice .chatgpt-import-save { margin-top: 16px; background: #0f5f5a; color: white; }
+.chatgpt-import-error { white-space: pre-wrap; color: #9b3024; }
+.chatgpt-import-history, .chatgpt-import-pending { margin-top: 12px; }
+.chatgpt-import-history > button { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 14px 0; border: 0; border-radius: 0; border-top: 1px solid #c8d8d3; background: transparent; text-align: left; }
+.chatgpt-import-history button span { display: grid; gap: 5px; }
+.chatgpt-import-history time, .chatgpt-import-history small { font-size: 13px; color: #617470; }
+.chatgpt-import-pending button { display: block; margin: 8px 0; text-align: left; }
+.chatgpt-import-reader { width: min(880px, calc(100vw - 36px)); max-height: calc(100dvh - 36px); padding: 0; border: 1px solid #c8d8d3; border-radius: 14px; background: #fbfcfa; color: #102a2a; }
+.chatgpt-import-reader::backdrop { background: rgb(16 42 42 / .78); }
+.chatgpt-import-reader > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; position: sticky; top: 0; padding: 14px 22px; border-bottom: 1px solid #c8d8d3; background: #fbfcfa; z-index: 1; }
+.chatgpt-import-reader-body { padding: 24px 30px; overflow-wrap: anywhere; }
+.chatgpt-import-reader h2 { font-family: var(--font-editorial, Georgia, serif); font-size: 30px; }
+.chatgpt-import-reader h3 { margin-top: 28px; }
+.chatgpt-import-reader details { margin: 20px 0; }
+.chatgpt-import-reader article { margin: 22px 0; }
+.chatgpt-import-reader pre { max-width: 100%; overflow: auto; }
+@media (max-width: 680px) {
+  .chatgpt-import-editor, .chatgpt-import-history, .chatgpt-import-pending { padding: 16px; }
+  .chatgpt-import-flow, .chatgpt-import-fields { grid-template-columns: minmax(0, 1fr); }
+  .chatgpt-import-editor > summary small { display: block; margin: 7px 0 0; }
+  .chatgpt-import-reader { width: 100vw; max-width: 100vw; max-height: 100dvh; height: 100dvh; margin: 0; border: 0; border-radius: 0; }
+  .chatgpt-import-reader-body { padding: 20px; }
+  .chatgpt-import-reader p { font-size: 17px; }
+  .chatgpt-import-history > button { align-items: start; flex-direction: column; gap: 6px; }
+}
