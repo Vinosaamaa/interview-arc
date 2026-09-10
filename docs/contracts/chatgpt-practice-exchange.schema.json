@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:interview-arc:chatgpt-practice-exchange:1",
+  "title": "Proposed offline practice exchange v1",
+  "oneOf": [{"$ref":"#/$defs/bank"},{"$ref":"#/$defs/export"}],
+  "$defs": {
+    "key": {"type":"string","minLength":1,"maxLength":200,"pattern":"^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"},
+    "timestamp": {"type":"string","format":"date-time","pattern":"(Z|[+-][0-9]{2}:[0-9]{2})$"},
+    "nullableTimestamp": {"oneOf":[{"$ref":"#/$defs/timestamp"},{"type":"null"}]},
+    "specialty": {"enum":["leetcode","system_design","behavioral"]},
+    "outcome": {"enum":["solved","solved_after_reviewing_approach","failed",null]},
+    "strings": {"type":"array","maxItems":100,"items":{"type":"string","minLength":1,"maxLength":2000}},
+    "progress": {
+      "type":"object","additionalProperties":false,
+      "required":["attemptCount","lastOutcome","lastCompletedAt","reviewDueDate"],
+      "properties":{
+        "attemptCount":{"type":["integer","null"],"minimum":0},
+        "lastOutcome":{"$ref":"#/$defs/outcome"},
+        "lastCompletedAt":{"$ref":"#/$defs/nullableTimestamp"},
+        "reviewDueDate":{"type":["string","null"],"format":"date"}
+      }
+    },
+    "question": {
+      "type":"object","additionalProperties":false,
+      "required":["specialty","questionId","title","url","topics","availability","progress"],
+      "properties":{
+        "specialty":{"$ref":"#/$defs/specialty"},"questionId":{"$ref":"#/$defs/key"},
+        "title":{"type":"string","minLength":1,"maxLength":500},
+        "url":{"type":["string","null"],"format":"uri"},
+        "topics":{"$ref":"#/$defs/strings"},"availability":{"enum":["active","inactive","unknown"]},
+        "progress":{"oneOf":[{"$ref":"#/$defs/progress"},{"type":"null"}]}
+      }
+    },
+    "bank": {
+      "type":"object","additionalProperties":false,
+      "required":["schemaVersion","kind","snapshotId","generatedAt","dataAsOf","timeZone","visibility","scope","questions"],
+      "properties":{
+        "schemaVersion":{"const":1},"kind":{"const":"bank_snapshot"},"snapshotId":{"$ref":"#/$defs/key"},
+        "generatedAt":{"$ref":"#/$defs/timestamp"},"dataAsOf":{"$ref":"#/$defs/timestamp"},
+        "timeZone":{"type":"string","minLength":1,"maxLength":100},
+        "visibility":{"enum":["public_catalog","owner_private"]},"scope":{"enum":["selected","all"]},
+        "questions":{"type":"array","maxItems":10000,"items":{"$ref":"#/$defs/question"}}
+      },
+      "allOf":[{"if":{"properties":{"visibility":{"const":"public_catalog"}}},"then":{"properties":{"questions":{"items":{"properties":{"progress":{"type":"null"}}}}}}}]
+    },
+    "event": {
+      "type":"object","additionalProperties":false,"required":["command","at","evidenceRef"],
+      "properties":{"command":{"enum":["start","pause","resume","finish"]},"at":{"$ref":"#/$defs/nullableTimestamp"},"evidenceRef":{"type":"string","minLength":1,"maxLength":500}}
+    },
+    "interval": {
+      "type":"object","additionalProperties":false,"required":["start","end","evidenceRef"],
+      "properties":{"start":{"$ref":"#/$defs/timestamp"},"end":{"$ref":"#/$defs/timestamp"},"evidenceRef":{"type":"string","minLength":1,"maxLength":500}}
+    },
+    "timing": {
+      "type":"object","additionalProperties":false,
+      "required":["state","basis","precision","events","intervals","reportedSeconds","evidenceRefs"],
+      "properties":{
+        "state":{"enum":["not_started","running","paused","finished"]},
+        "basis":{"enum":["observed_clock","user_reported","estimated","unknown"]},
+        "precision":{"enum":["second","minute","approximate","unknown"]},
+        "events":{"type":"array","maxItems":1000,"items":{"$ref":"#/$defs/event"}},
+        "intervals":{"type":"array","maxItems":500,"items":{"$ref":"#/$defs/interval"}},
+        "reportedSeconds":{"type":["integer","null"],"minimum":0,"maximum":604800},
+        "evidenceRefs":{"$ref":"#/$defs/strings"}
+      },
+      "allOf":[
+        {"if":{"properties":{"basis":{"const":"unknown"}}},"then":{"properties":{"reportedSeconds":{"type":"null"},"intervals":{"maxItems":0},"precision":{"const":"unknown"}}}},
+        {"if":{"properties":{"basis":{"const":"observed_clock"}}},"then":{"properties":{"reportedSeconds":{"type":"null"},"intervals":{"minItems":1},"evidenceRefs":{"minItems":1},"precision":{"enum":["second","minute"]}}}},
+        {"if":{"properties":{"basis":{"const":"estimated"}}},"then":{"properties":{"reportedSeconds":{"type":"integer"},"intervals":{"maxItems":0},"evidenceRefs":{"minItems":1},"precision":{"const":"approximate"}}}},
+        {"if":{"properties":{"basis":{"const":"user_reported"}}},"then":{"properties":{"evidenceRefs":{"minItems":1}},"anyOf":[{"properties":{"reportedSeconds":{"type":"integer"}}},{"properties":{"intervals":{"minItems":1}}}]}}
+      ]
+    },
+    "turn": {
+      "type":"object","additionalProperties":false,
+      "required":["turnKey","sourceChatKey","sequence","speaker","text","occurredAt","timestampBasis"],
+      "properties":{
+        "turnKey":{"$ref":"#/$defs/key"},"sourceChatKey":{"$ref":"#/$defs/key"},"sequence":{"type":"integer","minimum":1},
+        "speaker":{"enum":["user","assistant"]},"text":{"type":"string","minLength":1,"maxLength":100000},
+        "occurredAt":{"$ref":"#/$defs/nullableTimestamp"},"timestampBasis":{"enum":["user_reported","platform_export",null]}
+      },
+      "allOf":[{"if":{"properties":{"occurredAt":{"type":"null"}}},"then":{"properties":{"timestampBasis":{"type":"null"}}},"else":{"properties":{"timestampBasis":{"enum":["user_reported","platform_export"]}}}}]
+    },
+    "attempt": {
+      "type":"object","additionalProperties":false,
+      "required":["attemptKey","sourceChatKey","specialty","questionId","practiceDate","dateBasis","kind","userAttempted","outcome","outcomeEvidenceRefs","timing","coverage","gaps","turns","summary"],
+      "properties":{
+        "attemptKey":{"$ref":"#/$defs/key"},"sourceChatKey":{"$ref":"#/$defs/key"},"specialty":{"$ref":"#/$defs/specialty"},"questionId":{"$ref":"#/$defs/key"},
+        "practiceDate":{"type":["string","null"],"format":"date"},"dateBasis":{"enum":["user_reported","observed_clock",null]},
+        "kind":{"enum":["attempt","walkthrough","discussion"]},"userAttempted":{"type":["boolean","null"]},
+        "outcome":{"$ref":"#/$defs/outcome"},"outcomeEvidenceRefs":{"$ref":"#/$defs/strings"},"timing":{"$ref":"#/$defs/timing"},
+        "coverage":{"enum":["complete_provided_source","partial","summary_only"]},"gaps":{"$ref":"#/$defs/strings"},
+        "turns":{"type":"array","maxItems":10000,"items":{"$ref":"#/$defs/turn"}},"summary":{"type":"string","maxLength":20000}
+      },
+      "allOf":[
+        {"if":{"properties":{"practiceDate":{"type":"null"}}},"then":{"properties":{"dateBasis":{"type":"null"}}},"else":{"properties":{"dateBasis":{"enum":["user_reported","observed_clock"]}}}},
+        {"if":{"properties":{"coverage":{"const":"summary_only"}}},"then":{"properties":{"turns":{"maxItems":0},"gaps":{"minItems":1}}}},
+        {"if":{"properties":{"coverage":{"const":"partial"}}},"then":{"properties":{"gaps":{"minItems":1}}}},
+        {"if":{"properties":{"outcome":{"type":"string"}}},"then":{"properties":{"userAttempted":{"const":true},"kind":{"const":"attempt"},"specialty":{"const":"leetcode"},"outcomeEvidenceRefs":{"minItems":1}}}},
+        {"if":{"properties":{"kind":{"enum":["walkthrough","discussion"]}}},"then":{"properties":{"outcome":{"type":"null"}}}}
+      ]
+    },
+    "session": {
+      "type":"object","additionalProperties":false,"required":["sessionKey","timing","attempts"],
+      "properties":{"sessionKey":{"$ref":"#/$defs/key"},"timing":{"$ref":"#/$defs/timing"},"attempts":{"type":"array","minItems":1,"maxItems":100,"items":{"$ref":"#/$defs/attempt"}}}
+    },
+    "source": {
+      "type":"object","additionalProperties":false,"required":["sourceChatKey","kind","description"],
+      "properties":{"sourceChatKey":{"$ref":"#/$defs/key"},"kind":{"enum":["chat_transcript","account_export","user_supplied_text"]},"description":{"type":"string","minLength":1,"maxLength":2000}}
+    },
+    "export": {
+      "type":"object","additionalProperties":false,
+      "required":["schemaVersion","kind","packetId","snapshotId","exportedAt","timeZone","sources","gaps","sessions"],
+      "properties":{
+        "schemaVersion":{"const":1},"kind":{"const":"practice_export"},"packetId":{"$ref":"#/$defs/key"},
+        "snapshotId":{"$ref":"#/$defs/key"},"exportedAt":{"$ref":"#/$defs/nullableTimestamp"},"timeZone":{"type":"string","minLength":1,"maxLength":100},
+        "sources":{"type":"array","minItems":1,"maxItems":100,"items":{"$ref":"#/$defs/source"}},"gaps":{"$ref":"#/$defs/strings"},
+        "sessions":{"type":"array","minItems":1,"maxItems":100,"items":{"$ref":"#/$defs/session"}}
+      }
+    }
+  }
+}

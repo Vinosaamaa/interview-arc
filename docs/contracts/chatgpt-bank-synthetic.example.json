@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "kind": "bank_snapshot",
+  "snapshotId": "synthetic-bank-v1",
+  "generatedAt": "2026-09-09T10:00:00-07:00",
+  "dataAsOf": "2026-09-09T10:00:00-07:00",
+  "timeZone": "America/Los_Angeles",
+  "visibility": "public_catalog",
+  "scope": "selected",
+  "questions": [{
+    "specialty": "system_design",
+    "questionId": "synthetic-queue-exercise",
+    "title": "Synthetic queue discussion example",
+    "url": null,
+    "topics": ["queue"],
+    "availability": "active",
+    "progress": null
+  }]
+}

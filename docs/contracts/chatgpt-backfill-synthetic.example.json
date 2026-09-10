@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "kind": "practice_export",
+  "packetId": "synthetic-packet-v1",
+  "snapshotId": "synthetic-bank-v1",
+  "exportedAt": null,
+  "timeZone": "America/Los_Angeles",
+  "sources": [{"sourceChatKey":"synthetic-chat","kind":"user_supplied_text","description":"Entirely fictional demonstration; not a real practice record."}],
+  "gaps": [],
+  "sessions": [{
+    "sessionKey": "synthetic-session-1",
+    "timing": {
+      "state":"finished","basis":"estimated","precision":"approximate",
+      "events":[{"command":"start","at":null,"evidenceRef":"synthetic-chat:turn-1"},{"command":"finish","at":null,"evidenceRef":"synthetic-chat:turn-3"}],
+      "intervals":[],"reportedSeconds":300,"evidenceRefs":["synthetic-chat:turn-3"]
+    },
+    "attempts": [{
+      "attemptKey":"synthetic-attempt-1","sourceChatKey":"synthetic-chat",
+      "specialty":"system_design","questionId":"synthetic-queue-exercise",
+      "practiceDate":null,"dateBasis":null,
+      "kind":"discussion","userAttempted":false,"outcome":null,"outcomeEvidenceRefs":[],
+      "timing": {
+        "state":"finished","basis":"estimated","precision":"approximate",
+        "events":[{"command":"start","at":null,"evidenceRef":"synthetic-chat:turn-1"},{"command":"finish","at":null,"evidenceRef":"synthetic-chat:turn-3"}],
+        "intervals":[],"reportedSeconds":300,"evidenceRefs":["synthetic-chat:turn-3"]
+      },
+      "coverage":"complete_provided_source","gaps":[],
+      "turns":[
+        {"turnKey":"turn-1","sourceChatKey":"synthetic-chat","sequence":1,"speaker":"user","text":"Start this session and discussion. Explain a queue.","occurredAt":null,"timestampBasis":null},
+        {"turnKey":"turn-2","sourceChatKey":"synthetic-chat","sequence":2,"speaker":"assistant","text":"A queue processes items in first-in, first-out order.","occurredAt":null,"timestampBasis":null},
+        {"turnKey":"turn-3","sourceChatKey":"synthetic-chat","sequence":3,"speaker":"user","text":"Finish both. We spent about five active minutes on this discussion and session.","occurredAt":null,"timestampBasis":null}
+      ],
+      "summary":"Synthetic discussion only; no claimed design attempt or solution outcome."
+    }]
+  }]
+}
