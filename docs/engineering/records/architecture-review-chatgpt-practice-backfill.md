@@ -23,12 +23,12 @@ capabilities: ["portable-practice-contract"]
 amends: []
 supersedes: []
 learningRefs: []
-sources: [{"label":"Issue #453","url":"https://github.com/Vinosaamaa/interview-arc/issues/453","kind":"issue"},{"label":"Official ChatGPT Voice documentation","url":"https://help.openai.com/en/articles/20001274","kind":"external"}]
+sources: [{"label":"Issue #453","url":"https://github.com/Vinosaamaa/interview-arc/issues/453","kind":"issue"},{"label":"PR #454","url":"https://github.com/Vinosaamaa/interview-arc/pull/454","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["issue:453","docs/contracts/chatgpt-practice-exchange.schema.json","docs/architecture/chatgpt-live-capabilities.md"]}
 visibility: public-safe
 publicationEligibility: eligible
 issue: 453
-pr: null
+pr: 454
 release: null
 run: null
 ---
