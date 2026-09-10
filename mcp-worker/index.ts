@@ -3,6 +3,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ScopedMcpServer } from "./scoped-server";
 import { registerChatgptTools } from "./chatgpt-tools";
 import { registerEditorialTools } from "./editorial-tools";
+import { enqueueSolutionBatchItems, registerSolutionPublicationTools, type SolutionPublicationBatch } from "./solution-publication-tools";
+import { savePracticeSolutionPublication, type PracticeSolutionPublicationInput } from "../db/practice-solution-publication";
 import { registerLeetcodeTools } from "./leetcode-tools";
 import { registerCodingTools } from "./coding-tools";
 import { registerCoachingTools } from "./coaching-tools";
@@ -434,7 +436,7 @@ const specialistSolutionProfileSchema = z.object({
     })).max(100),
   }).optional(),
   editorialResearch: z.object({
-    source: z.literal("leetcode_playwright_controller"),
+    source: z.enum(["leetcode_playwright_controller", "leetcode_mcp"]),
     status: z.enum(["available", "premium_locked", "unavailable"]),
     url: z.string().url(),
     accessedAt: z.string().datetime(),
@@ -2359,6 +2361,15 @@ async function executeSpecialistWriteJob(job: SpecialistWriteJobRow, env?: Env) 
     const input = job.payload as Parameters<typeof setBehavioralClaimStatus>[2];
     return setBehavioralClaimStatus(job.ownerId, job.jobId, input, Date.now());
   }
+  if (job.operation === "practice_solution_batch") {
+    return enqueueSolutionBatchItems(job.ownerId, job.payload as SolutionPublicationBatch);
+  }
+  if (job.operation === "practice_solution_publication") {
+    if (!env) throw new Error("Solution publication requires the private database binding.");
+    const result = await savePracticeSolutionPublication(env.DB, job.ownerId, job.payload as PracticeSolutionPublicationInput);
+    await publishOwnerLiveUpdate(env.LIVE_UPDATES, job.ownerId, "practice");
+    return result;
+  }
   if (job.operation === "specialist_finalization") {
     const input = job.payload as {
       activityId: string;
@@ -2616,6 +2627,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
     ? new ScopedMcpServer({ name: "Interview Arc practice", version: "1.0.0" }, { instructions: chatgptPracticeGuide })
     : new McpServer({ name: "Interview Arc", version: "1.0.0" });
   registerEditorialTools(server, env.DB, ownerId);
+  registerSolutionPublicationTools(server, ownerId, specialistSolutionProfileSchema, () => scheduleSpecialistWriteProcessing(ctx, env));
   if (chatgpt) registerChatgptTools(server, env.DB, ownerId, (activityId) => readCurrentPracticeDesignCheckpoint(ownerId, activityId, env.AUDIO));
   registerLeetcodeTools(server, env.AUDIO, ownerId);
   registerCodingTools(server, env.DB, env.AUDIO, ownerId);

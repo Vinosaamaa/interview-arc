@@ -871,6 +871,25 @@ export const problemSolutionRevisions = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.specialty, table.questionId, table.revision] })],
 );
 
+// Later solution publication is an immutable, separately revisioned link. It
+// never changes the solution pinned in the original Practice Record.
+export const practiceSolutionPublications = sqliteTable(
+  "practice_solution_publications",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    payload: text("payload", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId, table.revision] }),
+    uniqueIndex("practice_solution_publications_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
 export const activitySolutionLinks = sqliteTable(
   "activity_solution_links",
   {
@@ -2491,6 +2510,8 @@ export const specialistWriteJobs = sqliteTable(
         "behavioral_evidence_item",
         "behavioral_claim_status",
         "specialist_finalization",
+        "practice_solution_batch",
+        "practice_solution_publication",
       ],
     }).notNull(),
     payloadHash: text("payload_hash").notNull(),

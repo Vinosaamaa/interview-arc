@@ -13,7 +13,9 @@ export type SpecialistWriteOperation =
   | "personal_bank_question"
   | "behavioral_evidence_item"
   | "behavioral_claim_status"
-  | "specialist_finalization";
+  | "specialist_finalization"
+  | "practice_solution_batch"
+  | "practice_solution_publication";
 
 export type SpecialistWriteStatus = SpecialistWriteJobRow["status"];
 
@@ -114,14 +116,22 @@ export async function enqueueSpecialistWriteJob(
   return receipt(reserved, reserved.createdAt !== nowMs);
 }
 
-export async function readSpecialistWriteJobs(ownerId: string, jobIds: string[]) {
+export async function readSpecialistWriteJobPayload(ownerId: string, jobId: string) {
+  const [row] = await getDb().select({ payload: specialistWriteJobs.payload }).from(specialistWriteJobs).where(and(
+    eq(specialistWriteJobs.ownerId, ownerId), eq(specialistWriteJobs.jobId, jobId),
+  ));
+  if (!row) throw new SpecialistWriteJobError("specialist_write_not_found", "No durable specialist write belongs to this owner and ID.");
+  return row.payload;
+}
+
+export async function readSpecialistWriteJobs(ownerId: string, jobIds: string[], allowMissing = false) {
   if (!jobIds.length) return [];
   const rows = await getDb().select().from(specialistWriteJobs).where(and(
     eq(specialistWriteJobs.ownerId, ownerId),
     inArray(specialistWriteJobs.jobId, [...new Set(jobIds)]),
   ));
   const byId = new Map(rows.map((row) => [row.jobId, row]));
-  return [...new Set(jobIds)].map((jobId) => {
+  return [...new Set(jobIds)].filter((jobId) => !allowMissing || byId.has(jobId)).map((jobId) => {
     const row = byId.get(jobId);
     if (!row) {
       throw new SpecialistWriteJobError(

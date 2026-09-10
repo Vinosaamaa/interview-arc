@@ -89,6 +89,7 @@ export async function GET(request: Request) {
       practiceAssets: record.practiceAssets,
       drawingAddition: record.drawingAddition,
       editorialAddition: record.editorialAddition,
+      solutionPublication: record.solutionPublication,
     }, { headers: { "cache-control": "private, no-store" } });
   } catch (error) {
     return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });

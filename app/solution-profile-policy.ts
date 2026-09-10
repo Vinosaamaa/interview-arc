@@ -3,7 +3,7 @@ import type { BehavioralProjectProfileBinding } from "../db/behavioral-project-d
 type SolutionProfileSection = { sectionKey?: string; title: string; body: string };
 
 export type LeetCodeEditorialResearch = {
-  source: "leetcode_playwright_controller";
+  source: "leetcode_playwright_controller" | "leetcode_mcp";
   status: "available" | "premium_locked" | "unavailable";
   url: string;
   accessedAt: string;
@@ -165,12 +165,12 @@ function editorialResearchMissingRequirements(
 ) {
   const missing: string[] = [];
   const editorialResearch = profile.editorialResearch;
-  if (!editorialResearch) return ["Playwright Editorial research receipt"];
+  if (!editorialResearch) return ["Official Editorial research receipt"];
 
   const recordedTitles = editorialResearch.approaches.map((approach) => normalize(approach.title));
   const renderedTitles = blocks.filter((block) => block.kind === "editorial").map((block) => normalize(block.title));
-  if (editorialResearch.source !== "leetcode_playwright_controller") {
-    missing.push("checked-in Playwright Editorial research source");
+  if (!["leetcode_playwright_controller", "leetcode_mcp"].includes(editorialResearch.source)) {
+    missing.push("supported official Editorial research source");
   }
   if (!/^https:\/\/leetcode\.com\/problems\/[a-z0-9-]+\/editorial\/?$/i.test(editorialResearch.url)) {
     missing.push("canonical Editorial research URL");

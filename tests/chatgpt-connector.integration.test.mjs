@@ -10,6 +10,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { acquireMcpIntegrationLock } from "./helpers/mcp-integration-lock.mjs";
 import { CHATGPT_PRACTICE_TOOLS } from "../mcp-worker/scoped-server.ts";
 import { availableMcpPort, runMcpCommand, startMcpWorker, stopMcpWorker, waitForMcpWorker } from "./helpers/mcp-worker-harness.mjs";
+import { profile, nativePracticeRecord } from "./helpers/solution-publication-fixture.mjs";
 
 test("bundled dedicated MCP route authenticates privately and reuses existing practice handlers", { timeout: 120000 }, async () => {
   const project = fileURLToPath(new URL("..", import.meta.url));
@@ -24,6 +25,16 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     const hash = value => createHash("sha256").update(value).digest("hex");
     const sameOwner = `u_${hash("synthetic@example.test").slice(0,32)}`;
     await runMcpCommand(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `INSERT INTO integration_tokens(token_hash,owner_id,label,created_at,last_used_at,revoked_at) VALUES('${hash(token)}','${sameOwner}','Synthetic test',1,NULL,NULL);`], project);
+    const native = nativePracticeRecord(), nativePayload = JSON.stringify(native), nativeFingerprint = hash(nativePayload);
+    const sqlString = value => `'${String(value).replaceAll("'", "''")}'`;
+    await runMcpCommand(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `
+      INSERT INTO practice_record_revisions(owner_id,activity_id,revision,operation_id,request_fingerprint,record_fingerprint,payload,created_at)
+        VALUES('${sameOwner}','${native.activityId}',1,'native-finalize','request-hash','${nativeFingerprint}',${sqlString(nativePayload)},1);
+      INSERT INTO practice_records(owner_id,activity_id,current_revision,specialty,question_id,title,completed_at,practice_date,outcome,solution_revision,record_fingerprint,finalization_operation_id,updated_at)
+        VALUES('${sameOwner}','${native.activityId}',1,'system_design','${native.questionId}',${sqlString(native.prompt.title)},${Date.parse(native.completedAt)},'${native.practiceDate}','${native.outcome}',NULL,'${nativeFingerprint}','native-finalize',1);
+      INSERT INTO activity_finalizations(owner_id,activity_id,specialty,status,payload,finalization_operation_id,finalization_request_fingerprint,practice_record_revision,practice_record_fingerprint)
+        VALUES('${sameOwner}','${native.activityId}','system_design','ready','{}','native-finalize','request-hash',1,'${nativeFingerprint}');
+    `], project);
     const port = await availableMcpPort(); const base = `http://127.0.0.1:${port}`;
     worker = startMcpWorker({ wrangler, config, persistence, project, port });
     await waitForMcpWorker(base, worker.child, worker.readDiagnosticTail);
@@ -178,5 +189,99 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     assert.equal((await client.callTool({ name: "backfill_practice_editorial", arguments: addition })).structuredContent.duplicate, true);
     const readback = await client.callTool({ name: "get_practice_editorial", arguments: { activityId: addition.activityId } });
     assert.equal(readback.structuredContent.editorial.explanation, addition.explanation);
+
+    const designPacket = JSON.parse(await readFile(new URL("../docs/contracts/chatgpt-backfill-synthetic.example.json", import.meta.url), "utf8"));
+    const design = designPacket.sessions[0].attempts.find((attempt) => attempt.question.specialty === "system_design");
+    designPacket.packetId = "synthetic-solution-design-packet";
+    designPacket.sessions[0].sessionKey = "synthetic-solution-design-session";
+    designPacket.sessions[0].attempts = [design];
+    design.question.questionId = created.structuredContent.questionId;
+    design.practiceDate = "2026-09-08"; design.dateBasis = "user_reported";
+    const designPreview = await client.callTool({ name: "preview_practice_backfill", arguments: { packet: designPacket } });
+    assert.equal(designPreview.isError, undefined, JSON.stringify(designPreview));
+    const designImport = await client.callTool({ name: "apply_practice_backfill", arguments: { packet: designPacket, previewToken: designPreview.structuredContent.previewToken } });
+    assert.equal(designImport.isError, undefined, JSON.stringify(designImport));
+    const completedDesign = designImport.structuredContent.records[0];
+    assert.equal(completedDesign.status, "completed");
+    const originalFingerprints = await (await fetch(`${base}/fixture/immutable-practice`)).json();
+    const importedBefore = await (await fetch(`${base}/fixture/imported-reader?activityId=${encodeURIComponent(completedDesign.activityId)}`)).json();
+    assert.equal(importedBefore.record.solutionPublication, null);
+    const nativeBefore = await client.callTool({ name: "get_activity_practice_record", arguments: { activityId: native.activityId } });
+    assert.equal(nativeBefore.isError, undefined, JSON.stringify(nativeBefore));
+    const batch = { batchId: "synthetic-solution-batch", items: [
+      { activityId: completedDesign.activityId, specialty: "system_design", questionId: completedDesign.questionId,
+        expectedPracticeRevision: completedDesign.revision, expectedPracticeFingerprint: completedDesign.fingerprint,
+        expectedSolutionRevision: 0, action: "create_or_revise", solutionProfile: profile() },
+      { activityId: native.activityId, specialty: "system_design", questionId: native.questionId,
+        expectedPracticeRevision: 1, expectedPracticeFingerprint: nativeFingerprint,
+        expectedSolutionRevision: 0, action: "create_or_revise", solutionProfile: profile() },
+      { activityId: "missing-synthetic-record", specialty: "system_design", questionId: native.questionId,
+        expectedPracticeRevision: 1, expectedPracticeFingerprint: "a".repeat(64),
+        expectedSolutionRevision: 0, action: "create_or_revise", solutionProfile: profile() },
+    ] };
+    const queued = await client.callTool({ name: "publish_practice_solutions", arguments: batch });
+    assert.equal(queued.isError, undefined, JSON.stringify(queued));
+    let batchResult;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      assert.equal((await fetch(`${base}/fixture/scheduled`, { method: "POST" })).status, 200);
+      const status = await client.callTool({ name: "get_practice_solution_batch", arguments: { batchId: batch.batchId } });
+      assert.equal(status.isError, undefined, JSON.stringify(status));
+      batchResult = status.structuredContent;
+      if (batchResult.status !== "pending") break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.equal(batchResult.status, "partial_failure", JSON.stringify(batchResult));
+    assert.equal(batchResult.batchReceipt.status, "saved");
+    assert.deepEqual(batchResult.items.map(item => item.receipt.status), ["saved", "saved", "failed"]);
+    assert.equal(batchResult.items[2].receipt.failure.retryable, false);
+    assert.equal(batchResult.items[2].receipt.failure.code, "solution_publication_record_missing");
+    for (const item of batchResult.items.slice(0, 2)) {
+      const lateRecord = await client.callTool({ name: "get_activity_practice_record", arguments: { activityId: item.activityId } });
+      assert.equal(lateRecord.isError, undefined, JSON.stringify(lateRecord));
+      assert.deepEqual(lateRecord.structuredContent.solutionPublication, item.receipt.result.publication);
+      assert.equal(item.receipt.result.publication.solutionRevision, 1);
+    }
+    const nativeAfter = await client.callTool({ name: "get_activity_practice_record", arguments: { activityId: native.activityId } });
+    assert.deepEqual(nativeAfter.structuredContent.practiceRecord, nativeBefore.structuredContent.practiceRecord);
+    const importedAfterResponse = await fetch(`${base}/fixture/imported-reader?activityId=${encodeURIComponent(completedDesign.activityId)}`);
+    assert.equal(importedAfterResponse.status, 200);
+    assert.equal(importedAfterResponse.headers.get("cache-control"), "private, no-store");
+    const importedAfter = await importedAfterResponse.json();
+    assert.deepEqual(importedAfter.record.solutionPublication, batchResult.items[0].receipt.result.publication);
+    assert.deepEqual({ ...importedAfter.record, solutionPublication: null }, importedBefore.record);
+    const repeated = await client.callTool({ name: "publish_practice_solutions", arguments: batch });
+    assert.equal(repeated.isError, undefined, JSON.stringify(repeated));
+    assert.deepEqual(repeated.structuredContent.items, batchResult.items);
+    const changedBatch = structuredClone(batch); changedBatch.items[0].expectedSolutionRevision = 1;
+    assert.equal((await client.callTool({ name: "publish_practice_solutions", arguments: changedBatch })).isError, true);
+    assert.deepEqual(await (await fetch(`${base}/fixture/immutable-practice`)).json(), originalFingerprints);
+
+    const conflictingChild = await (await fetch(`${base}/fixture/reserve-conflicting-solution-child`, { method: "POST" })).json();
+    const interruptedBatch = { batchId: "synthetic-interrupted-batch", items: batch.items.map(item => {
+      const reuse = { ...item, expectedSolutionRevision: 1, action: "reuse_current" };
+      delete reuse.solutionProfile;
+      return reuse;
+    }) };
+    const interruptedQueued = await client.callTool({ name: "publish_practice_solutions", arguments: interruptedBatch });
+    assert.equal(interruptedQueued.isError, undefined, JSON.stringify(interruptedQueued));
+    assert.equal(interruptedQueued.structuredContent.items.length, 3);
+    let interruptedResult;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      assert.equal((await fetch(`${base}/fixture/scheduled`, { method: "POST" })).status, 200);
+      const status = await client.callTool({ name: "get_practice_solution_batch", arguments: { batchId: interruptedBatch.batchId } });
+      assert.equal(status.isError, undefined, JSON.stringify(status));
+      interruptedResult = status.structuredContent;
+      if (interruptedResult.batchReceipt.status === "failed" && interruptedResult.items[0]?.receipt?.status === "saved") break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.equal(interruptedResult.status, "failed", JSON.stringify(interruptedResult));
+    assert.equal(interruptedResult.batchReceipt.failure.code, "specialist_write_identity_conflict");
+    assert.deepEqual(interruptedResult.items.map(item => item.state), ["saved", "failed", "not_queued"]);
+    assert.deepEqual(interruptedResult.items.slice(0, 2).map(item => item.receipt.status), ["saved", "failed"]);
+    assert.equal(interruptedResult.items[2].receipt, null);
+    assert.equal(interruptedResult.items[0].receipt.result.publication.action, "reused");
+    assert.equal(interruptedResult.items[1].jobId, conflictingChild.jobId);
+    assert.equal(interruptedResult.items[1].receipt.failure.code, "synthetic_existing_failure");
+    assert.deepEqual(await (await fetch(`${base}/fixture/immutable-practice`)).json(), originalFingerprints);
   } finally { if (client) await client.close(); await stopMcpWorker(worker?.child); await rm(persistence, { recursive: true, force: true }); await release(); }
 });

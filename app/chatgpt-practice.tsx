@@ -6,6 +6,7 @@ import type { readChatgptBank } from "../db/chatgpt-bank";
 import type { listImportedPractice } from "../db/chatgpt-import-store";
 import type { PracticeEditorial } from "../db/practice-editorial";
 import type { PracticeDrawing } from "../db/practice-drawing";
+import type { PracticeSolutionPublication } from "../db/practice-solution-publication";
 import "./chatgpt-practice.css";
 
 type Bank = Awaited<ReturnType<typeof readChatgptBank>>;
@@ -16,7 +17,7 @@ async function readJson<T>(response: Response): Promise<T> {
   if (!response.ok) throw new Error([value.error, ...((value.issues ?? []) as { path: string; message: string }[]).map((i) => `${i.path}: ${i.message}`)].join("\n"));
   return value as T;
 }
-export default function ChatgptPractice({ MarkdownBody }: { MarkdownBody: ComponentType<{ source: string }> }) {
+export default function ChatgptPractice({ MarkdownBody, refreshKey }: { MarkdownBody: ComponentType<{ source: string }>; refreshKey?: unknown }) {
   const [raw, setRaw] = useState("");
   const [packet, setPacket] = useState<ChatgptExport | null>(null);
   const [bank, setBank] = useState<Bank | null>(null);
@@ -28,7 +29,23 @@ export default function ChatgptPractice({ MarkdownBody }: { MarkdownBody: Compon
   const [message, setMessage] = useState("");
   const [page, setPage] = useState<Page | null>(null);
   const [pending, setPending] = useState<Page | null>(null);
-  const [selected, setSelected] = useState<(ImportedPractice & { editorial?: PracticeEditorial | null; drawing?: PracticeDrawing | null }) | null>(null);
+  const [selected, setSelected] = useState<(ImportedPractice & { editorial?: PracticeEditorial | null; drawing?: PracticeDrawing | null; solutionPublication?: PracticeSolutionPublication | null }) | null>(null);
+  const loadedRequest = useRef<{ activityId: string; refreshKey: unknown } | null>(null);
+  const selectedActivityId = selected?.activityId;
+  useEffect(() => {
+    if (!selectedActivityId) return;
+    if (loadedRequest.current?.activityId === selectedActivityId && loadedRequest.current.refreshKey === refreshKey) return;
+    const controller = new AbortController();
+    void fetch(`/api/chatgpt-practice?activityId=${encodeURIComponent(selectedActivityId)}`, { cache: "no-store", signal: controller.signal })
+      .then(readJson<{ record: NonNullable<typeof selected> }>)
+      .then(({ record }) => {
+        if (controller.signal.aborted) return;
+        loadedRequest.current = { activityId: selectedActivityId, refreshKey };
+        setSelected(current => current?.activityId === selectedActivityId ? record : current);
+      })
+      .catch(e => { if (e.name !== "AbortError") setError(e.message); });
+    return () => controller.abort();
+  }, [selectedActivityId, refreshKey]);
   const dialog = useRef<HTMLDialogElement>(null);
   const editor = useRef<HTMLDetailsElement>(null);
   const refresh = useCallback(async () => {
@@ -71,7 +88,11 @@ export default function ChatgptPractice({ MarkdownBody }: { MarkdownBody: Compon
   }
   async function openRecord(activityId: string) {
     setError("");
-    try { setSelected((await fetch(`/api/chatgpt-practice?activityId=${encodeURIComponent(activityId)}`, { cache: "no-store" }).then(readJson<{ record: ImportedPractice }>)).record); }
+    try {
+      const { record } = await fetch(`/api/chatgpt-practice?activityId=${encodeURIComponent(activityId)}`, { cache: "no-store" }).then(readJson<{ record: NonNullable<typeof selected> }>);
+      loadedRequest.current = { activityId, refreshKey };
+      setSelected(record);
+    }
     catch (e) { setError((e as Error).message); }
   }
   function correctRecord(record: ImportedPractice) {
@@ -119,6 +140,7 @@ export default function ChatgptPractice({ MarkdownBody }: { MarkdownBody: Compon
     {Boolean(pending?.records.length) && <details className="chatgpt-import-pending"><summary>Pending imports · {pending!.records.length}{pending?.nextOffset != null ? "+" : ""}</summary><p>Source evidence is saved. These entries do not count as completed practice yet.</p>{pending!.records.map((r) => <button type="button" key={r.activityId} onClick={() => void openRecord(r.activityId)}>{r.title} · {r.reasons[0]}</button>)}{pending?.nextOffset != null && <button type="button" onClick={() => void more("pending")}>Load more pending imports</button>}</details>}
     <dialog ref={dialog} className="chatgpt-import-reader" onClose={() => setSelected(null)}>
       {selected && <><header><span>Imported practice · Revision {selected.revision}</span><button type="button" autoFocus onClick={() => setSelected(null)}>Close</button></header><div className="chatgpt-import-reader-body"><h2>{selected.attempt.question.title}</h2><p>{selected.practiceDate ?? "Date unknown"} · {chatgptTimingLabel(selected.attempt.timing)} · {selected.status === "completed" ? "Completed" : "Pending"}</p><p>{selected.attempt.timing.evidence}</p>{selected.reasons.map((reason) => <p key={reason}>{reason}</p>)}{selected.status === "pending" && <button type="button" onClick={() => correctRecord(selected)}>Resolve this import</button>}
+        {selected.solutionPublication && <section aria-label="Solution added after practice"><h3>Solution added after practice</h3><p>Solution revision {selected.solutionPublication.solutionRevision} was {selected.solutionPublication.action} after this practice was saved.</p><div className="chatgpt-import-actions"><a href={`/?view=banks&specialty=${encodeURIComponent(selected.solutionPublication.specialty)}&problem=${encodeURIComponent(selected.solutionPublication.questionId)}`}>Open latest solution</a></div></section>}
         <h3>Prompt used</h3><MarkdownBody source={selected.attempt.question.prompt ?? "The source did not supply a prompt."} />
         <h3>Attempt summary</h3><MarkdownBody source={selected.attempt.summary || "No summary supplied."} />
         <h3>Activity review</h3><MarkdownBody source={selected.attempt.review || "No review supplied."} />

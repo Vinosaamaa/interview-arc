@@ -14,6 +14,8 @@ import document10 from "../.agents/skills/interview-arc-system-design/SKILL.md";
 import document11 from "../.agents/skills/interview-arc-system-design/references/reference-preflight.md";
 import document12 from "../.agents/skills/interview-arc-system-design/references/solution-template.md";
 import document13 from "../docs/contracts/practice-coaching-handoff.md";
+import document14 from "../docs/contracts/solution-profiles.md";
+import document15 from "../docs/contracts/practice-solution-publication.md";
 const documents = {
   "skill": { path: ".agents/skills/run-interview-practice/SKILL.md", text: document0 },
   "engine": { path: ".agents/skills/run-interview-practice/references/interviewer-engine.md", text: document1 },
@@ -29,8 +31,10 @@ const documents = {
   "design-preflight": { path: ".agents/skills/interview-arc-system-design/references/reference-preflight.md", text: document11 },
   "design-solution": { path: ".agents/skills/interview-arc-system-design/references/solution-template.md", text: document12 },
   "handoff": { path: "docs/contracts/practice-coaching-handoff.md", text: document13 },
+  "solutions": { path: "docs/contracts/solution-profiles.md", text: document14 },
+  "publication": { path: "docs/contracts/practice-solution-publication.md", text: document15 },
 };
-const documentId = z.enum(["skill","engine","evaluation","behavioral","system-design","coding","shared","behavioral-arc","system-design-arc","coding-arc","design-skill","design-preflight","design-solution","handoff"]);
+const documentId = z.enum(Object.keys(documents) as [keyof typeof documents, ...(keyof typeof documents)[]]);
 export function registerCoachingTools(server: McpServer) {
   server.registerTool("get_practice_coaching_guide", {
     title: "Read shared practice coaching",
@@ -55,7 +59,7 @@ export function registerCoachingTools(server: McpServer) {
       text: selected.text.slice(offset, end),
       requiredDocuments: ["skill", "engine", specialty, "shared", specialty + "-arc", "handoff",
         ...(specialty === "system-design" ? ["design-skill", "design-preflight"] : [])],
-      reviewDocuments: ["evaluation", ...(specialty === "system-design" ? ["design-solution"] : [])],
+      reviewDocuments: ["evaluation", "solutions", "publication", ...(specialty === "system-design" ? ["design-solution"] : [])],
       documents: Object.entries(documents).map(([id, doc]) => ({ id, path: doc.path })),
     };
     return { structuredContent: result, content: [{ type: "text" as const, text: JSON.stringify(result) }] };

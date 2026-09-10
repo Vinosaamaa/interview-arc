@@ -41,6 +41,7 @@ type LoadedPastSnapshotFields = {
   practiceAssets?: unknown;
   drawingAddition?: unknown;
   editorialAddition?: unknown;
+  solutionPublication?: unknown;
 };
 
 function loadedPastSnapshotFields(snapshot: LoadedPastSnapshotFields): LoadedPastSnapshotFields {
@@ -63,6 +64,7 @@ function loadedPastSnapshotFields(snapshot: LoadedPastSnapshotFields): LoadedPas
     ...(snapshot.practiceAssets === undefined ? {} : { practiceAssets: snapshot.practiceAssets }),
     ...(snapshot.drawingAddition === undefined ? {} : { drawingAddition: snapshot.drawingAddition }),
     ...(snapshot.editorialAddition === undefined ? {} : { editorialAddition: snapshot.editorialAddition }),
+    ...(snapshot.solutionPublication === undefined ? {} : { solutionPublication: snapshot.solutionPublication }),
   };
 }
 
@@ -71,7 +73,7 @@ export function retainLoadedPastSnapshot<T extends { id: string } & LoadedPastSn
   const retained = { ...current, ...next, ...loadedPastSnapshotFields(current) };
   // List projections omit unloaded detail. An actual newer addition must still
   // replace a previously loaded absence without regressing a newer revision.
-  for (const key of ["drawingAddition", "editorialAddition"] as const) {
+  for (const key of ["drawingAddition", "editorialAddition", "solutionPublication"] as const) {
     const incoming = next[key] as { revision?: number } | null | undefined;
     const loaded = current[key] as { revision?: number } | null | undefined;
     if (incoming && (!loaded || (incoming.revision ?? 0) >= (loaded.revision ?? 0))) retained[key] = next[key];

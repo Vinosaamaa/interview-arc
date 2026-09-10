@@ -1,6 +1,6 @@
 # Practice with connected ChatGPT text and Live
 
-Guide version: **7**. Exchange version: **1**. Checked: **2026-09-10**.
+Guide version: **8**. Exchange version: **1**. Checked: **2026-09-10**.
 
 Connect Interview Arc once in ChatGPT Developer mode using the deployed
 `/chatgpt/mcp` endpoint and OAuth. Cloudflare Access supplies the usual Arc
@@ -201,11 +201,9 @@ missing tools. Never present a generated image as an interactive MCP canvas.
 - Once the durable receipt is verified, say what saved, which records remain
   pending, and whether time is observed, estimated or unknown. Do not claim
   a reusable Solution Profile was created by historical backfill.
-- A question without any Solution Profile can receive a generated reusable
-  reference through `save_provisional_solution_profile` without an activity ID.
-  This remains provisional. Promoting or revising the current Solution after
-  historical backfill is not supported by this connector slice; do not claim
-  that a provisional save published a finalized editorial.
+- After saving native or imported practice, publish its complete reusable
+  Solution with `publish_practice_solutions` as defined below. A
+  `save_provisional_solution_profile` receipt alone remains provisional.
 - After practice has been saved, **Add the editorial to this practice** uses
   `get_practice_editorial` and `backfill_practice_editorial`. Supply the actual
   official editorial's canonical URL, access time, content SHA256, approach
@@ -215,6 +213,51 @@ missing tools. Never present a generated image as an interactive MCP canvas.
   it does not rewrite source turns, timing, result, or the pinned original
   practice revision. No automatic reference generation or Solution Profile
   promotion occurs. Both Codex and connected text can add this research later.
+
+## Publish solutions now or in a day-end batch
+
+- After **Save this practice** or **Publish this practice**, save the record
+  and publish its complete Solution unless the user requested record-only
+  saving. If required reference material is missing, save the record now and
+  report Solution pending; allow the full Solution to be published later.
+- After **Publish all today's practice and solutions**, collect the distinct
+  attempts actually available in this conversation or already saved in Arc.
+  Do not claim access to other chats. Keep full user and assistant exchanges;
+  never replace the transcript with the reusable answer.
+- Save unsaved attempts first through the native finalization or backfill
+  route above. A backfill packet may contain several attempts. Verify each
+  completed receipt; leave incomplete or conflicting attempts explicitly pending.
+- Read each saved Practice Record and current Solution Profile. Load the
+  specialty's shared review documents through `get_practice_coaching_guide`.
+  Author the complete standalone Solution, including required research,
+  approaches, code, diagrams, Q&A and evidence limits. The background Worker
+  persists supplied content; it cannot research or author missing answers.
+- Reuse a suitable current profile with `action: reuse_current`. Otherwise
+  use `create_or_revise` and supply the full profile, not a transcript summary
+  or an editorial-only addition. Preserve the existing profile when revising.
+  Missing required material stays pending with a concrete reason.
+- Call `publish_practice_solutions` with a stable batch ID and 1–10 items; the
+  entire batch must be below 1 MB and each item at most 768 KiB. Bind each item
+  to its exact activity, question, specialty, Practice
+  Record revision/fingerprint and expected current Solution revision (0 when
+  absent). For several attempts of one question, publish its profile once;
+  after that succeeds, reuse its resulting revision for the remaining attempts.
+- After uncertainty, retry the identical batch ID and content. Read
+  `get_practice_solution_batch` until every item is saved, failed or explicitly
+  not_queued after a terminal batch failure.
+  Queued or processing means pending. Report each result independently; one
+  failure does not undo successful items. Correct only failed or not_queued items using
+  fresh guards and a new batch ID. Never restart practice or delete records
+  to retry a Solution publication.
+- Once queued, Arc can finish persistence without the chat remaining open.
+  Preparation must finish before enqueue; do not promise a hidden ChatGPT
+  author or background timer. Returning to text is required for tool-dependent
+  saving when the active Voice surface cannot call the connector.
+- A later Solution publication is a separate revisioned addition. The
+  original transcript, timing, result and answer at completion stay unchanged.
+  Read back the saved addition and current bank profile before saying published.
+
+See [solution publication contract](../contracts/practice-solution-publication.md).
 
 ## Explicit text practice with Arc timers
 
@@ -237,14 +280,16 @@ the same activity with `save_specialist_finalization` and verify
 Record/Solution Profile contract still applies; queued is Finalization pending.
 Missing evidence must not be invented to satisfy a required field.
 
-For coding/design with no available reusable profile, use
+For coding/design when required reference material is still missing, use
 `solutionProfileAction: "defer"`, provide `solutionProfileDecision.reason`, and
 omit `solutionProfile`. This publishes the completed attempt with an explicit
 pending reference. It preserves every transcript, review, outcome and timer
 requirement. Reuse/revise an existing profile; never defer to remove one. Add
 official editorial research or an exported drawing afterward using the same
 activity ID. These additions do not rewrite the completion revision or claim
-that a complete Solution Profile exists.
+that a complete Solution Profile exists. When the full reference is prepared,
+publish it through `publish_practice_solutions`; ordinary completion should
+author or reuse a complete profile when the required sources are available.
 
 For behavioral finalization, prepare the fields together before submitting:
 - Universal answer → omit target-review metadata; target-tailored answers need

@@ -210,7 +210,12 @@ test("LeetCode completeness enforces the complete Editorial-first catalog and ru
 
   const missingResearchReceipt = structuredClone(complete);
   delete missingResearchReceipt.editorialResearch;
-  assert.ok(solutionProfileMissingRequirements("leetcode", missingResearchReceipt).includes("Playwright Editorial research receipt"));
+  assert.ok(solutionProfileMissingRequirements("leetcode", missingResearchReceipt).includes("Official Editorial research receipt"));
+  const hostedResearch = structuredClone(complete);
+  hostedResearch.editorialResearch.source = "leetcode_mcp";
+  assert.equal(isReusableSolutionProfile("leetcode", hostedResearch), true);
+  hostedResearch.editorialResearch.source = "unverified_reader";
+  assert.ok(solutionProfileMissingRequirements("leetcode", hostedResearch).includes("supported official Editorial research source"));
 
   const incompleteEditorialCatalog = structuredClone(complete);
   incompleteEditorialCatalog.editorialResearch.approaches = [{ title: "Ordered scan" }];

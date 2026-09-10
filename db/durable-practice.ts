@@ -3,7 +3,10 @@ import { getDb } from "./index";
 import { env } from "cloudflare:workers";
 import { readPracticeDrawing } from "./practice-drawing";
 import { readPracticeEditorial } from "./practice-editorial";
+import { readPracticeSolutionPublication } from "./practice-solution-publication.ts";
 import type { NativeTranscriptSource, TypedTranscriptSource } from "./transcript-source";
+import { normalizedTags, normalizedSolutionProfile, profileFingerprint, validateSolutionProfile, validatePracticeScenariosForSpecialty } from "./solution-profile-validation.ts";
+export { profileFingerprint } from "./solution-profile-validation.ts";
 import { solutionProfileMissingRequirements } from "../app/solution-profile-policy";
 import {
   activityDeliveryAnalyses,
@@ -116,12 +119,9 @@ import {
   type BehavioralAttemptAnalysis,
 } from "./behavioral-attempt-analysis";
 import {
-  behavioralPracticeScenariosSchema,
-  behavioralPracticeScenariosFingerprint,
   projectBehavioralPracticeScenarios,
   renderBehavioralPracticeScenariosHtml,
   renderBehavioralPracticeScenariosMarkdown,
-  type BehavioralPracticeScenario,
 } from "./behavioral-practice-scenario";
 import { behavioralStoryInputSchema } from "./behavioral-story-policy";
 import {
@@ -153,7 +153,7 @@ import {
   projectProfileMissingRequirements,
   readCurrentBehavioralProjectBinding,
 } from "./behavioral-project-deep-dive";
-import type { BehavioralProjectFocus } from "./behavioral-project-deep-dive-policy";
+import type { Specialty, SolutionProfile } from "./solution-profile-types.ts";
 import {
   assertPracticeRecordFinalizationPreconditions,
   persistFinalizedPracticeRecord,
@@ -162,7 +162,7 @@ import {
 } from "./practice-records";
 import { readPracticeAssetRevision, type PreparedPracticeAsset } from "./practice-assets";
 
-export type Specialty = "leetcode" | "system_design" | "behavioral";
+export type { Specialty, SolutionProfile } from "./solution-profile-types.ts";
 export type SpecialistTaskType = Specialty | "loop_recorder" | "learning_specialist" | "resume_cover_letter";
 export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
 export type TranscriptSpeaker = "user" | "specialist";
@@ -235,63 +235,11 @@ export type SpecialistFinalization = {
     researchPerformed: boolean;
     sourcesChecked: string[];
   };
-  solutionProfile?: {
-    schemaVersion: 1;
-    summary: string;
-    sections: Array<{ sectionKey?: string; title: string; body: string }>;
-    tags: string[];
-    references: Array<{ title: string; url: string; accessedAt: string }>;
-    behavioralAnswer?: {
-      preferred: {
-        label: string;
-        answer: string;
-        evidence: string[];
-        evidenceGaps: string[];
-      };
-      alternatives: Array<{
-        label: string;
-        answer: string;
-        whenToUse?: string;
-        evidence: string[];
-        evidenceGaps: string[];
-      }>;
-    };
-    practiceScenarios?: BehavioralPracticeScenario[];
-    questionsAndAnswers?: {
-      status: "included" | "not_applicable";
-      reason: string;
-      items: Array<{
-        question: string;
-        answer: string;
-        classification: "current_implementation" | "target_design" | "fictional_practice_scenario";
-        turnIds: string[];
-      }>;
-    };
-    editorialResearch?: {
-      source: "leetcode_playwright_controller";
-      status: "available" | "premium_locked" | "unavailable";
-      url: string;
-      accessedAt: string;
-      contentSha256?: string;
-      reason?: string;
-      approaches: Array<{ title: string }>;
-    };
-    projectDeepDive?: {
-      projectId: string;
-      bindingRevision: number;
-      focus: BehavioralProjectFocus;
-      sourceClaimId?: string;
-    };
-  };
+  solutionProfile?: SolutionProfile;
   practiceRecord?: PracticeRecordSemanticInput;
 };
 
 const TRANSCRIPT_SECTION = /transcript|conversation|raw exchange|verbatim/i;
-
-function normalizedTags(tags: string[]) {
-  return [...new Set(tags.map((tag) => tag.trim().toLowerCase().replace(/[^a-z0-9+#.:]+/g, "-")).filter(Boolean))]
-    .slice(0, 256);
-}
 
 async function enrichPersonalLeetCodeQuestion(
   ownerId: string,
@@ -341,72 +289,6 @@ async function enrichPersonalLeetCodeQuestion(
     if (updated.length > 0) return;
   }
   throw new Error("The personal LeetCode question changed during finalization; retry the finalization.");
-}
-
-function validateSolutionProfile(
-  specialty: Specialty,
-  payload: SpecialistFinalization["solutionProfile"],
-  projectBinding: typeof behavioralProjectQuestionBindings.$inferSelect | null = null,
-  questionId?: string,
-) {
-  if (!payload) throw new Error("A complete finalization needs a reusable Solution Profile.");
-  if (specialty !== "behavioral" && payload.projectDeepDive) {
-    throw new Error("Project Deep Dive metadata is supported only for behavioral Solution Profiles.");
-  }
-  if (specialty !== "leetcode" && payload.editorialResearch) {
-    throw new Error("Editorial research metadata is supported only for LeetCode Solution Profiles.");
-  }
-  if (specialty === "leetcode" && questionId && payload.editorialResearch
-      && payload.editorialResearch.url !== `https://leetcode.com/problems/${questionId}/editorial/`) {
-    throw new Error("Editorial research must use the canonical URL for the finalized LeetCode question.");
-  }
-  validatePracticeScenariosForSpecialty(specialty, payload.practiceScenarios);
-  const missing = [
-    ...solutionProfileMissingRequirements(specialty, payload),
-    ...(specialty === "behavioral" ? projectProfileMissingRequirements(payload, projectBinding) : []),
-  ];
-  if (missing.length) throw new Error(`A complete finalization needs a reusable Solution Profile; missing: ${missing.join(", ")}.`);
-}
-
-function validatePracticeScenariosForSpecialty(
-  specialty: Specialty,
-  scenarios: BehavioralPracticeScenario[] | undefined,
-) {
-  if (!scenarios) return;
-  if (specialty !== "behavioral") {
-    throw new Error("Practice scenarios are supported only for behavioral Solution Profiles.");
-  }
-  behavioralPracticeScenariosSchema.parse(scenarios);
-}
-
-function normalizedSolutionProfile(
-  payload: NonNullable<SpecialistFinalization["solutionProfile"]>,
-  fallbackReferences: SpecialistFinalization["references"],
-) {
-  return {
-    ...payload,
-    tags: normalizedTags(payload.tags),
-    references: payload.references.length ? payload.references : fallbackReferences,
-  };
-}
-
-export function profileFingerprint(payload: NonNullable<SpecialistFinalization["solutionProfile"]>) {
-  return JSON.stringify({
-    summary: payload.summary.trim(),
-    sections: payload.sections.map((section) => ({
-      ...(section.sectionKey ? { sectionKey: section.sectionKey.trim() } : {}),
-      title: section.title.trim(),
-      body: section.body.trim(),
-    })),
-    tags: normalizedTags(payload.tags).sort(),
-    references: payload.references.map((reference) => ({ title: reference.title.trim(), url: reference.url.trim() }))
-      .sort((left, right) => left.url.localeCompare(right.url)),
-    behavioralAnswer: payload.behavioralAnswer,
-    practiceScenarios: behavioralPracticeScenariosFingerprint(payload.practiceScenarios),
-    questionsAndAnswers: payload.questionsAndAnswers,
-    editorialResearch: payload.editorialResearch,
-    projectDeepDive: payload.projectDeepDive,
-  });
 }
 
 export async function saveProvisionalSolutionProfile(
@@ -5619,9 +5501,10 @@ export async function readSpecialistTasks(ownerId: string) {
 
 export async function readActivityPracticeRecord(ownerId: string, activityId: string) {
   const db = getDb();
-  const [drawingAddition, editorialAddition] = await Promise.all([
+  const [drawingAddition, editorialAddition, solutionPublication] = await Promise.all([
     readPracticeDrawing(env.DB, ownerId, activityId),
     readPracticeEditorial(env.DB, ownerId, activityId),
+    readPracticeSolutionPublication(env.DB, ownerId, activityId),
   ]);
   const [turns, notes, finalizations, classificationRows, modeTransitions, modeTurnOverrides, finalAnswerRows, resumeContextRows, reviews, clips, deliveryAnalyses, codeAttempts, typedExchangeDeletions, solutionLinks, projectLinks, practiceRecord] = await Promise.all([
     db
@@ -5822,6 +5705,7 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     practiceAssets,
     drawingAddition,
     editorialAddition,
+    solutionPublication,
     projectDeepDiveLink: projectLinks[0] ?? null,
   };
 }
