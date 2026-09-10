@@ -51,6 +51,7 @@ export async function savePracticeEditorial(db: Database, owner: string, value: 
   const payload = canonicalJson(editorial);
   try {
     await db.batch([
+      // Invalid JSON raises a SQLite error and rolls back the batch on conflict.
       db.prepare(`SELECT json(CASE WHEN COALESCE((SELECT MAX(revision) FROM practice_editorial_additions WHERE owner_id = ? AND activity_id = ?), 0) = ?
         AND EXISTS(SELECT 1 FROM chatgpt_import_records WHERE ${eligiblePractice})
         THEN 'true' ELSE 'editorial_conflict' END)`).bind(owner, input.activityId, input.expectedRevision, owner, input.activityId, input.questionId),

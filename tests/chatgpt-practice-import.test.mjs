@@ -61,6 +61,7 @@ test("later editorial revisions preserve imported evidence, validate owner/probl
     await assert.rejects(savePracticeEditorial(db, "alice", { ...input, operationId: "wrong-question", questionId: "wrong" }), /belonging to this owner/);
     await assert.rejects(savePracticeEditorial(db, "alice", { ...input, operationId: "wrong-url", editorialUrl: "https://leetcode.com/problems/three-sum/editorial/" }), /must match/);
     await assert.rejects(savePracticeEditorial(db, "alice", { ...input, operationId: "stale" }), /not confirmed/);
+    await assert.rejects(savePracticeEditorial(db, "alice", { ...input, operationId: "future", expectedRevision: 50 }), /not confirmed/);
     assert.equal(sqlite.prepare("SELECT count(*) n FROM practice_editorial_additions").get().n, 1);
     const changed = { ...input, operationId: "editorial-two", expectedRevision: 1, explanation: "Corrected synthetic explanation with the same evidence source." };
     const lossyTransport = { ...db, async batch(statements) { await db.batch(statements); throw new Error("lost response"); } };
