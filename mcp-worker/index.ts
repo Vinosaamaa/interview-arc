@@ -5,6 +5,7 @@ import { registerChatgptTools } from "./chatgpt-tools";
 import { registerEditorialTools } from "./editorial-tools";
 import { registerLeetcodeTools } from "./leetcode-tools";
 import { registerDrawingTools } from "./drawing-tools";
+import { routeExcalidrawProxy } from "./excalidraw-proxy";
 import { resolveChatgptAccessOwner, type ChatgptAccessConfig } from "./chatgpt-access";
 import chatgptPracticeGuide from "../docs/agents/chatgpt-practice-prompt.md";
 import { z } from "zod";
@@ -5245,6 +5246,7 @@ export default {
     if (url.pathname === "/chatgpt/mcp") {
       const owner = await resolveChatgptAccessOwner(request, env);
       if (!owner) return json(request, { error: "Unauthorized", code: "unauthorized", retryable: false }, { status: 401 });
+      if (url.searchParams.get("surface") === "excalidraw") return routeExcalidrawProxy(request);
       return createMcpHandler(createServer(owner, env, ctx, true), { route: "/chatgpt/mcp" })(request, env, ctx);
     }
 
