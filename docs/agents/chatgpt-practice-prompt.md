@@ -1,6 +1,6 @@
 # Practice with connected ChatGPT text and Live
 
-Guide version: **5**. Exchange version: **1**. Checked: **2026-09-10**.
+Guide version: **7**. Exchange version: **1**. Checked: **2026-09-10**.
 
 Connect Interview Arc once in ChatGPT Developer mode using the deployed
 `/chatgpt/mcp` endpoint and OAuth. Cloudflare Access supplies the usual Arc
@@ -12,7 +12,7 @@ test; deploying this code alone does not establish that connection.
 
 1. In text, say **Prepare a system-design practice** (or coding/behavioral).
    Use the connected bank search/fetch tools and place the selected ID, prompt,
-   progress and reference material in this conversation. Preparation selects
+   progress and the Practice handoff defined below in this conversation. Preparation selects
    content; it does not create an Arc activity or start its timer.
 2. Switch to Live in the same conversation, if that ChatGPT surface supports
    the transition. Practice verbally, using Start, Pause, Resume and Finish as
@@ -36,7 +36,14 @@ missing tools. Never present a generated image as an interactive MCP canvas.
 
 ### Prepare from real sources
 
-- Confirm guide version 5, the selected specialty, exact question ID, current
+- At preparation, call `get_practice_coaching_guide` and read its required
+  documents and every page. These are the same repository skill and AGENTS.md
+  sources used by Codex, not a separate abbreviated ChatGPT coaching persona.
+  Reuse unchanged loaded hashes during this chat. Follow the returned handoff
+  contract before switching to Live; publish its coaching instructions and
+  necessary disclosed facts in the conversation, without leaking an interview
+  reference answer. Never assume hidden tool results reached Voice.
+- Confirm guide version 7, the selected specialty, exact question ID, current
   progress and observation time. Unknown is not “never attempted.”
 - Use `search` and `fetch`; follow search paging with its exact source
   revision. Refresh after saving. Never claim a partial page is the full bank.
@@ -110,6 +117,34 @@ missing tools. Never present a generated image as an interactive MCP canvas.
   `get_leetcode_recent_submissions`, `get_leetcode_submission` and
   `get_leetcode_editorial`. These fixed read operations do not require a Mac
   runtime. Only submitted code is available; unsaved editor drafts are not.
+- For coding inside ChatGPT, use `open_coding_editor` with an exact LeetCode
+  slug or existing Arc coding question ID. The panel includes the complete
+  statement, original example images, and separate Java/Python drafts. When
+  a graph or tree needs a text explanation, supply faithful `diagramText` ASCII
+  preserving node labels, edges, directions and weights. Inspect the source;
+  do not guess image contents or replace a detailed image with a lossy sketch.
+  Reopening preserves code. Language changes use separate saved drafts.
+- The panel saves private draft revisions and **Review with ChatGPT** sends a
+  request naming the saved revision. Read `get_coding_draft` before reviewing;
+  preserve exact source and distinguish static findings from executed tests.
+  Never claim that a draft save also published its transcript or review.
+- When the owner explicitly says submit, call `submit_coding_draft` for the
+  current saved and reviewed revision, then make at most five delayed
+  `get_coding_submission` reads after 1, 2, 4, 8 and 15 seconds. If the judge
+  remains pending, preserve the operation and report it pending; resume that
+  same receipt later. Show returned compiler errors, runtime
+  errors or failing cases. The user can edit, save, review and submit the next
+  revision. The judge runs on LeetCode, not this panel or the Arc Worker.
+  A timeout is uncertain, not failure or acceptance: retain the operation ID,
+  inspect the owner's recent submissions, and never resend the same revision.
+- `create_practice_question` can add an original coding prompt directly from
+  chat, then `open_coding_editor` opens it. Custom questions without a matching
+  LeetCode problem support review but have no LeetCode judge; say so explicitly.
+- After coding, save the exact draft source and actual review through
+  `save_leetcode_code_attempt`, preserving transcript parity and actual judge
+  evidence. Complete the practice using the native or backfill flow below.
+  An unavailable editorial can be deferred and added later; it is never a
+  reason to invent official research or discard a completed session.
 - For missing/expired LeetCode access, use `get_leetcode_connection` and direct
   the owner to Arc `/connect/leetcode`. Session values belong only in that
   private connection form, never chat or tool arguments. Reconnection requires

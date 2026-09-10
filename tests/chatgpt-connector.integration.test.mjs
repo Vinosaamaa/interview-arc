@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,6 +20,10 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
   let worker; let client;
   try {
     await runMcpCommand(wrangler, ["d1", "migrations", "apply", "DB", "--local", "--persist-to", persistence, "--config", config], project);
+    const token = "ia_synthetic_portable_client_token_01";
+    const hash = value => createHash("sha256").update(value).digest("hex");
+    const sameOwner = `u_${hash("synthetic@example.test").slice(0,32)}`;
+    await runMcpCommand(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `INSERT INTO integration_tokens(token_hash,owner_id,label,created_at,last_used_at,revoked_at) VALUES('${hash(token)}','${sameOwner}','Synthetic test',1,NULL,NULL);`], project);
     const port = await availableMcpPort(); const base = `http://127.0.0.1:${port}`;
     worker = startMcpWorker({ wrangler, config, persistence, project, port });
     await waitForMcpWorker(base, worker.child, worker.readDiagnosticTail);
@@ -37,6 +42,44 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     assert.equal(names.includes("register_specialist_task"), false);
     assert.equal(names.includes("create_loop"), false);
     assert.equal(names.includes("delete_typed_practice_exchange"), false);
+    const coaching = await client.callTool({ name: "get_practice_coaching_guide", arguments: { specialty: "system-design" } });
+    assert.equal(coaching.isError, undefined);
+    for (const document of [...coaching.structuredContent.requiredDocuments, ...coaching.structuredContent.reviewDocuments]) {
+      let offset = 0, expectedSha256, full = "", path;
+      do {
+        const page = await client.callTool({ name: "get_practice_coaching_guide", arguments: { specialty: "system-design", document, offset, ...(expectedSha256 ? {expectedSha256} : {}) } });
+        assert.equal(page.isError, undefined, JSON.stringify(page));
+        full += page.structuredContent.text; offset = page.structuredContent.nextOffset;
+        expectedSha256 = page.structuredContent.sha256; path = page.structuredContent.path;
+      } while (offset !== null);
+      assert.equal(full, await readFile(new URL("../" + path, import.meta.url), "utf8"));
+      assert.equal(createHash("sha256").update(full).digest("hex"), expectedSha256);
+    }
+    assert.equal((await client.callTool({name:"get_practice_coaching_guide",arguments:{specialty:"system-design",document:"system-design-arc",offset:16000,expectedSha256:"0".repeat(64)}})).isError,true);
+    const codingQuestion = await client.callTool({ name: "create_practice_question", arguments: { operationId: "synthetic-editor-question", specialty: "leetcode", title: "Synthetic editor exercise", prompt: "Return 42.\nExample: no input -> 42.", url: null } });
+    const editor = await client.callTool({ name: "open_coding_editor", arguments: { questionId: codingQuestion.structuredContent.questionId, language: "java", diagramText: "input -> answer" } });
+    assert.equal(editor.isError, undefined, JSON.stringify(editor));
+    assert.equal(editor.structuredContent.draft.problem.statement, "Return 42.\nExample: no input -> 42.");
+    const resource = await client.readResource({ uri: "ui://interview-arc/coding-editor-v1.html" });
+    assert.equal(resource.contents[0].mimeType, "text/html;profile=mcp-app");
+    assert.match(resource.contents[0].text, /Review with ChatGPT/);
+    const editorCode = "class Solution {\n    int answer() { return 42; }\n}\n";
+    const savedDraft = await client.callTool({ name: "save_coding_draft", arguments: { draftId: editor.structuredContent.draft.draftId, expectedRevision: 1, operationId: "synthetic-editor-save", code: editorCode } });
+    assert.equal(savedDraft.isError, undefined, JSON.stringify(savedDraft));
+    const rereadDraft = await client.callTool({ name: "get_coding_draft", arguments: { draftId: editor.structuredContent.draft.draftId } });
+    assert.equal(rereadDraft.structuredContent.draft.code, editorCode);
+    assert.equal(rereadDraft.structuredContent.draft.revision, 2);
+    const portable = new Client({ name: "Synthetic CLI client", version: "1" });
+    try {
+      await portable.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { Authorization: `Bearer ${token}` } } }));
+      const portableNames = (await portable.listTools()).tools.map(tool=>tool.name);
+      for (const name of ["get_leetcode_problem", "get_leetcode_editorial", "open_coding_editor", "submit_coding_draft", "save_practice_drawing"]) assert.ok(portableNames.includes(name), name);
+      const sharedDraft = await portable.callTool({ name: "get_coding_draft", arguments: { draftId: editor.structuredContent.draft.draftId } });
+      assert.equal(sharedDraft.structuredContent.draft.code, editorCode);
+      const portableCoaching = await portable.callTool({ name: "get_practice_coaching_guide", arguments: { specialty: "system-design" } });
+      assert.deepEqual(portableCoaching.structuredContent, coaching.structuredContent);
+      assert.equal((await portable.readResource({uri:"ui://interview-arc/coding-editor-v1.html"})).contents[0].mimeType,"text/html;profile=mcp-app");
+    } finally { await portable.close(); }
     const catalog = await client.callTool({ name: "query_practice_catalog", arguments: { specialty: "system_design" } });
     assert.equal(catalog.isError, undefined);
     const created = await client.callTool({ name: "create_practice_question", arguments: { operationId: "synthetic-route-question", specialty: "system_design", title: "Synthetic bundled bank question", prompt: "Design a fictional queue.", url: null } });

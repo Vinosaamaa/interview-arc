@@ -4,6 +4,8 @@ import { ScopedMcpServer } from "./scoped-server";
 import { registerChatgptTools } from "./chatgpt-tools";
 import { registerEditorialTools } from "./editorial-tools";
 import { registerLeetcodeTools } from "./leetcode-tools";
+import { registerCodingTools } from "./coding-tools";
+import { registerCoachingTools } from "./coaching-tools";
 import { registerDrawingTools } from "./drawing-tools";
 import { routeExcalidrawProxy } from "./excalidraw-proxy";
 import { resolveChatgptAccessOwner, type ChatgptAccessConfig } from "./chatgpt-access";
@@ -2615,8 +2617,10 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
     : new McpServer({ name: "Interview Arc", version: "1.0.0" });
   registerEditorialTools(server, env.DB, ownerId);
   if (chatgpt) registerChatgptTools(server, env.DB, ownerId, (activityId) => readCurrentPracticeDesignCheckpoint(ownerId, activityId, env.AUDIO));
-  if (chatgpt) registerLeetcodeTools(server, env.AUDIO, ownerId);
-  if (chatgpt) registerDrawingTools(server, env.DB, env.AUDIO, ownerId);
+  registerLeetcodeTools(server, env.AUDIO, ownerId);
+  registerCodingTools(server, env.DB, env.AUDIO, ownerId);
+  registerCoachingTools(server);
+  registerDrawingTools(server, env.DB, env.AUDIO, ownerId);
 
   server.registerTool(
     "get_practice_interaction_mode",
@@ -5389,6 +5393,7 @@ export default {
       return acknowledgeDeliveryReviewBypass(ownerId, request, decodeURIComponent(deliveryReviewBypass[1]));
     }
     if (url.pathname === "/mcp" || url.pathname.startsWith("/mcp/")) {
+      if (url.searchParams.get("surface") === "excalidraw") return routeExcalidrawProxy(request);
       return createMcpHandler(createServer(ownerId, env, ctx))(request, env, ctx);
     }
     return json(request, { error: "Not found" }, { status: 404 });
