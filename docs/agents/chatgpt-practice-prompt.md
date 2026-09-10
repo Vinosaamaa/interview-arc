@@ -1,6 +1,6 @@
 # Practice with connected ChatGPT text and Live
 
-Guide version: **2**. Exchange version: **1**. Checked: **2026-09-10**.
+Guide version: **3**. Exchange version: **1**. Checked: **2026-09-10**.
 
 Connect Interview Arc once in ChatGPT Developer mode using the deployed
 `/chatgpt/mcp` endpoint and OAuth. Cloudflare Access supplies the usual Arc
@@ -27,12 +27,16 @@ If that surface cannot switch to Voice, report the actual limitation; do not
 claim the integration made Live available. Connected text remains a complete
 bank and persistence path when those tools are available to the account.
 A model or plan that exposes only read tools cannot save through a hidden tool.
+Check actual tool availability in each chat. A successful web connector test
+does not establish native mobile support. If a mobile chat lacks Arc or
+Excalidraw tools, use the connected web chat; a drawing URL alone cannot enable
+missing tools. Never present a generated image as an interactive MCP canvas.
 
 ## Instructions for ChatGPT
 
 ### Prepare from real sources
 
-- Confirm guide version 2, the selected specialty, exact question ID, current
+- Confirm guide version 3, the selected specialty, exact question ID, current
   progress and observation time. Unknown is not “never attempted.”
 - Use `search` and `fetch`; follow search paging with its exact source
   revision. Refresh after saving. Never claim a partial page is the full bank.
