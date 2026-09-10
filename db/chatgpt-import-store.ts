@@ -3,6 +3,7 @@ import {
   type ChatgptExport, type ChatgptImportRequest, type ImportedPractice, type ImportPreview,
 } from "./chatgpt-import-policy.ts";
 import { readPracticeEditorial } from "./practice-editorial.ts";
+import { readPracticeDrawing } from "./practice-drawing.ts";
 
 // This adapter accepts a D1 binding so its actual SQL/transaction behavior can
 // be tested without booting unrelated specialist services.
@@ -22,12 +23,13 @@ export async function readImportedPractice(db: Database, owner: string, activity
       WHERE r.owner_id = ? AND r.activity_id = ? AND v.revision = ?`).bind(owner, activityId, revision).first<Stored>();
   if (!row) return null;
   const record = parseRecord(row);
-  const [session, editorial] = await Promise.all([
+  const [session, editorial, drawing] = await Promise.all([
     db.prepare("SELECT payload FROM chatgpt_import_sessions WHERE owner_id = ? AND session_key = ?").bind(owner, record.session.sessionKey).first<{ payload: string }>(),
     // Historical pending revisions can belong to a now-completed coding record.
     record.attempt.question.specialty === "leetcode" ? readPracticeEditorial(db, owner, activityId) : null,
+    record.attempt.question.specialty === "system_design" ? readPracticeDrawing(db, owner, activityId) : null,
   ]);
-  return { ...record, editorial, ...(session ? { currentSession: JSON.parse(session.payload) as NonNullable<ImportedPractice["currentSession"]> } : {}) };
+  return { ...record, editorial, drawing, ...(session ? { currentSession: JSON.parse(session.payload) as NonNullable<ImportedPractice["currentSession"]> } : {}) };
 }
 export async function listImportedPractice(db: Database, owner: string, offset = 0, status: "completed" | "pending" = "completed") {
   const rows = await db.prepare(`SELECT activity_id, revision, fingerprint, status, specialty, question_id, practice_date,
