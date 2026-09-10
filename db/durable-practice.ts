@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, exists, gt, inArray, isNotNull, isNull, lt, notExists, or, sql } from "drizzle-orm";
 import { getDb } from "./index";
+import type { NativeTranscriptSource, TypedTranscriptSource } from "./transcript-source";
 import { solutionProfileMissingRequirements } from "../app/solution-profile-policy";
 import {
   activityDeliveryAnalyses,
@@ -162,7 +163,7 @@ export type Specialty = "leetcode" | "system_design" | "behavioral";
 export type SpecialistTaskType = Specialty | "loop_recorder" | "learning_specialist" | "resume_cover_letter";
 export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
 export type TranscriptSpeaker = "user" | "specialist";
-export type TranscriptSource = "codex" | "dictation" | "audio_transcript";
+export type { TranscriptSource } from "./transcript-source";
 export type VoiceCaptureDecision = "activity_related" | "unrelated" | "uncertain";
 export type { ReviewReason } from "./review-cadence";
 export type { CodeAttemptReviewV1 } from "./code-attempt-review";
@@ -672,7 +673,7 @@ export async function appendTranscriptTurns(
     turnId: string;
     speaker: TranscriptSpeaker;
     body: string;
-    source?: TranscriptSource;
+    source?: NativeTranscriptSource;
     sequence: number;
     occurredAt: number;
   }>,
@@ -770,6 +771,7 @@ export async function saveTypedPracticeExchange(
     };
   },
   nowMs: number,
+  source: TypedTranscriptSource = "codex",
 ) {
   if (input.userTurn.turnId === input.specialistTurn.turnId) {
     throw new Error("The user and specialist turns require different stable turn IDs.");
@@ -811,7 +813,7 @@ export async function saveTypedPracticeExchange(
       specialty: input.specialty,
       speaker: "user" as const,
       body: input.userTurn.body,
-      source: "codex" as const,
+      source,
       sequence: firstSequence,
       occurredAt: input.userTurn.occurredAt,
       updatedAt: nowMs,
@@ -823,7 +825,7 @@ export async function saveTypedPracticeExchange(
       specialty: input.specialty,
       speaker: "specialist" as const,
       body: input.specialistTurn.body,
-      source: "codex" as const,
+      source,
       sequence: firstSequence + 1,
       occurredAt: input.specialistTurn.occurredAt,
       updatedAt: nowMs,
@@ -1068,7 +1070,7 @@ export async function deleteTypedPracticeExchange(
           ${practiceTranscriptTurns.turnId} = ${pair.userTurn.turnId}
           AND ${practiceTranscriptTurns.specialty} = ${pair.userTurn.specialty}
           AND ${practiceTranscriptTurns.speaker} = 'user'
-          AND ${practiceTranscriptTurns.source} = 'codex'
+          AND ${practiceTranscriptTurns.source} = ${pair.userTurn.source}
           AND ${practiceTranscriptTurns.body} = ${pair.userTurn.body}
           AND ${practiceTranscriptTurns.sequence} = ${pair.userTurn.sequence}
           AND ${practiceTranscriptTurns.occurredAt} = ${pair.userTurn.occurredAt}
@@ -1077,7 +1079,7 @@ export async function deleteTypedPracticeExchange(
           ${practiceTranscriptTurns.turnId} = ${pair.responseTurn.turnId}
           AND ${practiceTranscriptTurns.specialty} = ${pair.responseTurn.specialty}
           AND ${practiceTranscriptTurns.speaker} = 'specialist'
-          AND ${practiceTranscriptTurns.source} = 'codex'
+          AND ${practiceTranscriptTurns.source} = ${pair.responseTurn.source}
           AND ${practiceTranscriptTurns.body} = ${pair.responseTurn.body}
           AND ${practiceTranscriptTurns.sequence} = ${pair.responseTurn.sequence}
           AND ${practiceTranscriptTurns.occurredAt} = ${pair.responseTurn.occurredAt}

@@ -5,6 +5,7 @@ import type {
 } from "./content-types";
 import type { FocusBlock } from "./career-work";
 import type { CodeAttemptReviewDisplay } from "../db/code-attempt-review";
+import type { TranscriptSource } from "../db/transcript-source";
 import type { InteractionModeRegistry } from "../db/interaction-mode-policy";
 import type { InteractionModeSummary } from "../db/interaction-mode-store";
 import type { InteractionModeClassification } from "../db/interaction-mode-classification";
@@ -66,7 +67,7 @@ export type TranscriptTurn = {
   specialty: ActivityType;
   speaker: "user" | "specialist";
   body: string;
-  source: "codex" | "dictation" | "audio_transcript";
+  source: TranscriptSource;
   sequence: number;
   occurredAt: number;
   updatedAt: number;

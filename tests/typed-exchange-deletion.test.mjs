@@ -31,6 +31,13 @@ const turns = [
   },
 ];
 
+test("ChatGPT typed pairs retain their source and cannot pair with a Codex reply", () => {
+  const chatgpt = turns.map((turn) => ({ ...turn, source: "chatgpt" }));
+  assert.equal(resolveTypedExchangePair(chatgpt, "typed-user-1").responseTurn.source, "chatgpt");
+  assert.equal(listTypedExchangePairs(chatgpt).length, 1);
+  assert.throws(() => resolveTypedExchangePair([chatgpt[0], turns[1]], "typed-user-1"), /adjacent typed/);
+});
+
 test("typed exchange pairing requires one adjacent codex user/specialist pair", () => {
   const resolved = resolveTypedExchangePair(turns, "typed-user-1");
   assert.equal(resolved.responseTurn.turnId, "typed-response-1");

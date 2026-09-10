@@ -1,5 +1,9 @@
 import { createMcpHandler } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ScopedMcpServer } from "./scoped-server";
+import { registerChatgptTools } from "./chatgpt-tools";
+import { resolveChatgptAccessOwner, type ChatgptAccessConfig } from "./chatgpt-access";
+import chatgptPracticeGuide from "../docs/agents/chatgpt-practice-prompt.md";
 import { z } from "zod";
 import { codeAttemptReviewInputSchema } from "./code-attempt-review-schema";
 import { codeLineCount } from "../db/code-attempt-review";
@@ -183,7 +187,7 @@ import {
 } from "../db/practice-state-commands";
 import { readPracticeActivityIdentity } from "../db/practice-activity-identity";
 import { leetCodeQuestionMetadataSchema } from "../db/question-metadata";
-import { readPreparedPracticeAssetSet } from "../db/practice-assets";
+import { readCurrentPracticeDesignCheckpoint, readPreparedPracticeAssetSet } from "../db/practice-assets";
 import { routePracticeAssets } from "./practice-assets";
 import {
   connectOwnerLiveUpdates,
@@ -331,7 +335,7 @@ import { CoverLetterArtifactError, readCoverLetterOperation } from "../db/cover-
 import { routeLiveV1 } from "./live-v1";
 import { isLiveV1Path } from "./live-v1-path";
 
-interface Env {
+interface Env extends ChatgptAccessConfig {
   DB: D1Database;
   AUDIO: R2Bucket;
   LIVE_UPDATES: DurableObjectNamespace;
@@ -2592,7 +2596,7 @@ async function interactionModeProjection(ownerId: string, activityId: string) {
   };
 }
 
-function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
+function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt = false) {
   const publishOwnerLiveUpdate = (
     namespace: LiveUpdateNamespace | undefined,
     updateOwnerId: string,
@@ -2602,7 +2606,10 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     ...options,
     executionContext: ctx,
   });
-  const server = new McpServer({ name: "Interview Arc", version: "1.0.0" });
+  const server = chatgpt
+    ? new ScopedMcpServer({ name: "Interview Arc practice", version: "1.0.0" }, { instructions: chatgptPracticeGuide })
+    : new McpServer({ name: "Interview Arc", version: "1.0.0" });
+  if (chatgpt) registerChatgptTools(server, env.DB, ownerId, (activityId) => readCurrentPracticeDesignCheckpoint(ownerId, activityId, env.AUDIO));
 
   server.registerTool(
     "get_practice_interaction_mode",
@@ -2743,7 +2750,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           specialty,
           userTurn,
           specialistTurn,
-        }, Date.now());
+        }, Date.now(), chatgpt ? "chatgpt" : "codex");
         const receipt = typedExchangeReceipt(activityTitle);
         return {
           content: [{ type: "text", text: receipt }],
@@ -5228,6 +5235,12 @@ export default {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
     if (url.pathname === "/health") return json(request, { ok: true, service: "interview-arc-mcp" });
+
+    if (url.pathname === "/chatgpt/mcp") {
+      const owner = await resolveChatgptAccessOwner(request, env);
+      if (!owner) return json(request, { error: "Unauthorized", code: "unauthorized", retryable: false }, { status: 401 });
+      return createMcpHandler(createServer(owner, env, ctx, true), { route: "/chatgpt/mcp" })(request, env, ctx);
+    }
 
     const ownerId = await resolveIntegrationOwner(
       isLiveV1Path(url.pathname) ? authorizationBearerToken(request) : bearerToken(request),

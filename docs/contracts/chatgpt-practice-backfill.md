@@ -1,7 +1,7 @@
 # ChatGPT practice exchange v1
 
-**Versioned transport and historical import contract.** Owns the files produced
-by the [practice guide](../agents/chatgpt-practice-prompt.md).
+**Versioned transport and historical import contract.** Owns the source packet
+used by the [practice guide](../agents/chatgpt-practice-prompt.md), including direct connector saves.
 Issue [#453](https://github.com/Vinosaamaa/interview-arc/issues/453);
 PR [#454](https://github.com/Vinosaamaa/interview-arc/pull/454).
 
@@ -16,6 +16,16 @@ versions instead of guessing. The examples are entirely synthetic:
 
 ## Bank input
 
+The connected workflow uses authenticated MCP `search` and `fetch` at the
+separate `/chatgpt/mcp` surface. It reads the same current owner-private bank
+service. `preview_practice_backfill`, `apply_practice_backfill` and
+`get_practice_backfill_receipt` reuse the importer below without manual files.
+Connector packets retain the 1 MB importer bound and return compact immutable receipts.
+Provider setup and account access follow the
+[connection assessment](../architecture/chatgpt-live-capabilities.md).
+
+The earlier browser exchange remains available as a recovery option:
+
 A user can paste selected catalog/status rows or upload existing bank JSON.
 ChatGPT may normalize them to this snapshot, retaining exactly what was supplied.
 An authenticated owner downloads a snapshot from **Past → ChatGPT practice**.
@@ -23,7 +33,7 @@ An authenticated owner downloads a snapshot from **Past → ChatGPT practice**.
 owner-private questions, durable completed activities/imports and scheduled
 reviews. Optional `specialty` returns a selected snapshot. The response is
 private/no-store and contains no credential or owner identifier. This is a
-browser-session download, not a public or authenticated ChatGPT REST connection.
+browser-session download; it is separate from the OAuth-authenticated MCP connection.
 
 | Field | Meaning |
 | --- | --- |

@@ -328,8 +328,8 @@ test("complete finalization becomes saved only with an exact immutable Practice 
         ('owner-practice-record-other','${activityId}','specialist-practice-record','system_design','specialist','Other owner review must remain isolated.','codex',2,${startedAt + 60_000},${startedAt + 60_000}),
         ('owner-practice-record','${incompleteActivityId}','user-practice-record-incomplete','system_design','user','This activity has no semantic record sidecar.','codex',1,${startedAt + 30_000},${startedAt + 30_000}),
         ('owner-practice-record','${incompleteActivityId}','specialist-practice-record-incomplete','system_design','specialist','The incomplete packet must remain blocked.','codex',2,${startedAt + 60_000},${startedAt + 60_000}),
-        ('owner-practice-record','${leetcodeActivityId}','user-practice-record-leetcode','leetcode','user','I scan once and keep the largest value.','codex',1,${startedAt + 30_000},${startedAt + 30_000}),
-        ('owner-practice-record','${leetcodeActivityId}','specialist-practice-record-leetcode','leetcode','specialist','The invariant is that best is the maximum of the scanned prefix.','codex',2,${startedAt + 60_000},${startedAt + 60_000}),
+        ('owner-practice-record','${leetcodeActivityId}','user-practice-record-leetcode','leetcode','user','I scan once and keep the largest value.','chatgpt',1,${startedAt + 30_000},${startedAt + 30_000}),
+        ('owner-practice-record','${leetcodeActivityId}','specialist-practice-record-leetcode','leetcode','specialist','The invariant is that best is the maximum of the scanned prefix.','chatgpt',2,${startedAt + 60_000},${startedAt + 60_000}),
         ('owner-practice-record','${storageCollisionActivityId}','user-practice-record-storage-collision','system_design','user','I would persist the semantic packet first.','codex',1,${startedAt + 30_000},${startedAt + 30_000}),
         ('owner-practice-record','${storageCollisionActivityId}','specialist-practice-record-storage-collision','system_design','specialist','Keep the attempt pending through the immutable record write.','codex',2,${startedAt + 60_000},${startedAt + 60_000});
       INSERT INTO practice_notes
@@ -634,6 +634,7 @@ test("complete finalization becomes saved only with an exact immutable Practice 
     const leetcodeSaved = await call(client, "save_specialist_finalization", leetcodeFinalization);
     assert.equal(leetcodeSaved.writeReceipt.status, "saved");
     const leetcodeReadback = await call(client, "get_activity_practice_record", { activityId: leetcodeActivityId });
+    assert.equal(leetcodeReadback.turns.every((turn) => turn.source === "chatgpt"), true);
     assert.equal(leetcodeReadback.practiceRecord.payload.specialtyOutput.kind, "code_attempts");
     assert.deepEqual(
       leetcodeReadback.practiceRecord.payload.specialtyOutput.codeAttemptIds,

@@ -1,3 +1,5 @@
+import { isTypedTranscriptSource } from "./transcript-source.ts";
+
 export type TypedExchangeTurn = {
   turnId: string;
   specialty: string;
@@ -43,7 +45,7 @@ function isCompatibleTypedReply(userTurn: TypedExchangeTurn, candidate: TypedExc
     candidate
     && candidate.sequence === userTurn.sequence + 1
     && candidate.speaker === "specialist"
-    && candidate.source === "codex"
+    && candidate.source === userTurn.source
     && candidate.specialty === userTurn.specialty,
   );
 }
@@ -60,10 +62,10 @@ function resolveTypedExchangePairFromIndex(
       "That owner-scoped typed user turn does not exist in this activity.",
     );
   }
-  if (userTurn.speaker !== "user" || userTurn.source !== "codex") {
+  if (userTurn.speaker !== "user" || !isTypedTranscriptSource(userTurn.source)) {
     throw new TypedExchangeDeletionError(
       "typed_exchange_source_mismatch",
-      "Only a typed Codex user exchange can be removed with this operation.",
+      "Only a typed Codex or ChatGPT user exchange can be removed with this operation.",
     );
   }
 
@@ -98,7 +100,7 @@ export function resolveTypedExchangePair(
 export function listTypedExchangePairs(turns: TypedExchangeTurn[]) {
   const index = indexTypedExchangeTurns(turns);
   return turns
-    .filter((turn) => turn.speaker === "user" && turn.source === "codex")
+    .filter((turn) => turn.speaker === "user" && isTypedTranscriptSource(turn.source))
     .flatMap((turn) => {
       try {
         const pair = resolveTypedExchangePairFromIndex(index, turn.turnId);
