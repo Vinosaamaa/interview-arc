@@ -30,7 +30,7 @@ export async function readExcalidrawLink(input: { url: string; offset?: number; 
   if (!Number.isInteger(offset) || offset < 0 || offset > MAX_SCENE || (offset > 0 && !input.expectedSha256)) return fail("Continue with nextOffset and expectedSha256 from the previous page.");
   // The user-supplied key stays in memory. Neither it nor scene content is logged or persisted.
   let response: Response;
-  try { response = await fetcher(`https://json.excalidraw.com/api/v2/${match[1]}`, { redirect: "error", signal: AbortSignal.timeout(10000) }); }
+  try { response = await fetcher(`https://json.excalidraw.com/api/v2/${match[1]}`, { redirect: "manual", signal: AbortSignal.timeout(10000) }); }
   catch { return fail("Could not fetch the snapshot. It may be unavailable; retry the same link."); }
   if (!response.ok || !response.body) return fail("Excalidraw did not return an available snapshot.");
   const reader = response.body.getReader();

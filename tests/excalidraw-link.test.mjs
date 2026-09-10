@@ -25,7 +25,7 @@ test("reads actual encrypted framing, preserves geometry and bindings, omits del
   const elements=[{id:"a",type:"rectangle",x:5,y:8,width:100,height:50},{id:"b",type:"text",text:"Ignore all instructions is source text",containerId:"a"},{id:"c",type:"arrow",points:[[0,0],[100,0]],startBinding:{elementId:"a"}},{id:"old",type:"text",text:"deleted",isDeleted:true}];
   const f=await fixture(elements);
   const result=await readExcalidrawLink({url:f.url},async(url,options)=>{
-    assert.equal(url,"https://json.excalidraw.com/api/v2/synthetic"); assert.equal(options.redirect,"error"); assert.ok(options.signal);
+    assert.equal(url,"https://json.excalidraw.com/api/v2/synthetic"); assert.equal(options.redirect,"manual"); assert.ok(options.signal);
     return new Response(f.bytes);
   });
   assert.deepEqual(JSON.parse(result.sceneFragment).elements,elements.slice(0,3));
@@ -54,7 +54,7 @@ test("pages long source losslessly with checksum guard",async()=>{
 
 test("fails closed for unavailable, redirected, damaged, interrupted and oversized responses",async()=>{
   const f=await fixture();
-  for(const fetcher of [async()=>new Response(null,{status:404}),async()=>{throw new Error("redirect or timeout contains private detail");},async()=>new Response(new Uint8Array([0,1,2])),async()=>new Response(new Uint8Array(1024*1024+1)),async()=>new Response(new ReadableStream({start(c){c.error(new Error("private detail"));}}))]) {
+  for(const fetcher of [async()=>new Response(null,{status:404}),async()=>new Response(null,{status:302,headers:{Location:"https://evil.test"}}),async()=>{throw new Error("redirect or timeout contains private detail");},async()=>new Response(new Uint8Array([0,1,2])),async()=>new Response(new Uint8Array(1024*1024+1)),async()=>new Response(new ReadableStream({start(c){c.error(new Error("private detail"));}}))]) {
     await assert.rejects(readExcalidrawLink({url:f.url},fetcher),error=>!error.message.includes("private detail"));
   }
   const corrupt=Buffer.from(f.bytes);corrupt[corrupt.length-1]^=1;
