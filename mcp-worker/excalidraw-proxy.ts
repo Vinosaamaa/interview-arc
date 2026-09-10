@@ -1,5 +1,3 @@
-import { deflateSync } from "node:zlib";
-
 const UPSTREAM = "https://mcp.excalidraw.com/mcp";
 const MAX = 2 * 1024 * 1024;
 const TOOLS = new Set(["read_me", "create_view", "export_to_excalidraw", "save_checkpoint", "read_checkpoint"]);
@@ -9,18 +7,20 @@ const reply = (id: unknown, result: unknown) => Response.json({ jsonrpc: "2.0", 
 async function bounded(response: Response, limit: number): Promise<Uint8Array> {
   if (!response.body) throw new Error("Empty response.");
   const reader = response.body.getReader();
-  const chunks: Uint8Array[] = []; let size = 0;
+  let bytes = new Uint8Array(Math.min(limit, 65536)); let size = 0;
   try {
     for (;;) {
       const { done, value } = await reader.read(); if (done) break;
-      size += value.length;
-      if (size > limit) { await reader.cancel(); throw new Error("Drawing exceeds the supported size."); }
-      chunks.push(value);
+      const nextSize = size + value.length;
+      if (nextSize > limit) { await reader.cancel(); throw new Error("Drawing exceeds the supported size."); }
+      if (nextSize > bytes.length) {
+        const grown = new Uint8Array(Math.min(limit, Math.max(nextSize, bytes.length * 2)));
+        grown.set(bytes.subarray(0, size)); bytes = grown;
+      }
+      bytes.set(value, size); size = nextSize;
     }
   } finally { reader.releaseLock(); }
-  const bytes = new Uint8Array(size); let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-  return bytes;
+  return bytes.subarray(0, size);
 }
 
 function frame(...parts: Uint8Array[]): Buffer {
@@ -38,7 +38,8 @@ export async function exportExcalidrawScene(json: string, fetcher: typeof fetch 
   if (scene?.type !== "excalidraw" || !Array.isArray(scene.elements) || !scene.elements.length || scene.elements.length > 10000 || scene.elements.some((e: unknown) => !e || typeof e !== "object" || Array.isArray(e))) throw new Error("Supply a nonempty Excalidraw scene.");
   const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 128 }, true, ["encrypt"]);
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const compressed = deflateSync(frame(Buffer.from("{}"), Buffer.from(json)));
+  const input = new Response(frame(Buffer.from("{}"), Buffer.from(json))).body!;
+  const compressed = await bounded(new Response(input.pipeThrough(new CompressionStream("deflate"))), MAX + 65536);
   const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new Uint8Array(compressed));
   const bytes = frame(Buffer.from(JSON.stringify({ version: 2, compression: "pako@1", encryption: "AES-GCM" })), iv, new Uint8Array(encrypted));
   if (bytes.length > 1024 * 1024) throw new Error("Compressed drawing exceeds the 1 MiB limit.");

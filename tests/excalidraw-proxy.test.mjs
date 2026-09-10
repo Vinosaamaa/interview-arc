@@ -50,3 +50,12 @@ test('export failures return safe errors and never leak upstream details or key 
     const body=await r.json();assert.equal(body.result.isError,true);assert.ok(!JSON.stringify(body).includes('SECRET'));assert.match(body.result.content[0].text,/failed or timed out/);
   }
 });
+
+test('fragmented upstream responses remain exact and stop when the byte limit is exceeded',async()=>{
+  const chunk = new Uint8Array(32768).fill(120);
+  const response = await routeExcalidrawProxy(request('resources/read',{uri:'ui://excalidraw/mcp-app.html'}),async()=>new Response(new ReadableStream({start(controller){for(let i=0;i<5;i++)controller.enqueue(chunk);controller.close();}})));
+  assert.equal((await response.text()),'x'.repeat(chunk.length*5));
+  let cancelled=false;
+  const oversized=await routeExcalidrawProxy(request('resources/read',{uri:'ui://excalidraw/mcp-app.html'}),async()=>new Response(new ReadableStream({pull(controller){controller.enqueue(new Uint8Array(1024*1024));},cancel(){cancelled=true;}})));
+  assert.equal(oversized.status,502);assert.equal(cancelled,true);
+});

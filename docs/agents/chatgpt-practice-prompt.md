@@ -106,13 +106,6 @@ missing tools. Never present a generated image as an interactive MCP canvas.
   the editable original, including embedded image data, and a reopen link;
   this import flow does not generate an SVG/PNG preview. Existing website-native
   System Design checkpoints and asset sets retain their separate workflow.
-- For an existing timed Arc activity, save exchanges and native finalization;
-  do not import a second activity through backfill. Preserve exact code and
-  review wording. Every `review.testingEvidence` string must also appear
-  verbatim in the stored evaluation findings or final declaration. A statement
-  that no tests ran is valid evidence when stored consistently; never fabricate
-  execution to satisfy validation. Correct terminally rejected payloads under
-  a new operation ID and verify the durable record before claiming publication.
 - For LeetCode reads, prefer Arc's hosted `get_leetcode_problem`,
   `get_leetcode_recent_submissions`, `get_leetcode_submission` and
   `get_leetcode_editorial`. These fixed read operations do not require a Mac
@@ -197,7 +190,11 @@ revisions and reuse mutation IDs on retries. These are measured server
 boundaries only for commands the API actually receives.
 
 Save exact exchanges and code attempts with their supplied evidence. Generated
-reference answers belong to Solution, not to the user's code attempt. Complete
+reference answers belong to Solution, not to the user's code attempt. Every
+`review.testingEvidence` string must also appear verbatim in the visible review
+and stored evaluation findings or final declaration; an honest statement that
+no tests ran is valid. Correct a terminally rejected payload under a new
+operation ID. Complete
 the same activity with `save_specialist_finalization` and verify
 `get_specialist_write_status` reports saved. Its existing strict Practice
 Record/Solution Profile contract still applies; queued is Finalization pending.
