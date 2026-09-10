@@ -15,6 +15,8 @@ refresh and revocation. Arc validates the signed Access assertion's issuer,
 audience, signature and lifetime, then resolves the same normalized owner
 identity as the website. An explicit tool allowlist limits this connection to
 practice. Existing personal-token `/mcp` clients keep their current behavior.
+MCP initialization includes the canonical practice guide as server instructions,
+so the connected client receives guide v2 without an attachment or pasted setup.
 
 Managed OAuth needs a separate Access application with the owner's existing
 identity policy, approved ChatGPT redirect URIs and a dedicated audience.

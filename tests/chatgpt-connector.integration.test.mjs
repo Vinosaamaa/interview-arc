@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,6 +28,7 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     assert.equal((await fetch(`${base}/mcp`, { headers: { "cf-access-jwt-assertion": assertion } })).status, 401);
     client = new Client({ name: "Synthetic connector", version: "1" });
     await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/chatgpt/mcp`), { requestInit: { headers: { "cf-access-jwt-assertion": assertion } } }));
+    assert.equal(client.getInstructions(), await readFile(new URL("../docs/agents/chatgpt-practice-prompt.md", import.meta.url), "utf8"));
     const names = (await client.listTools()).tools.map((tool) => tool.name);
     assert.deepEqual(names.sort(), [...CHATGPT_PRACTICE_TOOLS].sort());
     assert.equal(names.includes("search"), true);

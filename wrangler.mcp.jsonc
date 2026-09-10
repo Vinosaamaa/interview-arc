@@ -4,6 +4,7 @@
   "main": "./mcp-worker/index.ts",
   "compatibility_date": "2026-05-22",
   "compatibility_flags": ["nodejs_compat"],
+  "rules": [{ "type": "Text", "globs": ["**/*.md"], "fallthrough": true }],
   "triggers": {
     "crons": ["* * * * *"]
   },

@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ScopedMcpServer } from "./scoped-server";
 import { registerChatgptTools } from "./chatgpt-tools";
 import { resolveChatgptAccessOwner, type ChatgptAccessConfig } from "./chatgpt-access";
+import chatgptPracticeGuide from "../docs/agents/chatgpt-practice-prompt.md";
 import { z } from "zod";
 import { codeAttemptReviewInputSchema } from "./code-attempt-review-schema";
 import { codeLineCount } from "../db/code-attempt-review";
@@ -2606,7 +2607,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
     executionContext: ctx,
   });
   const server = chatgpt
-    ? new ScopedMcpServer({ name: "Interview Arc practice", version: "1.0.0" })
+    ? new ScopedMcpServer({ name: "Interview Arc practice", version: "1.0.0" }, { instructions: chatgptPracticeGuide })
     : new McpServer({ name: "Interview Arc", version: "1.0.0" });
   if (chatgpt) registerChatgptTools(server, env.DB, ownerId, (activityId) => readCurrentPracticeDesignCheckpoint(ownerId, activityId, env.AUDIO));
 
