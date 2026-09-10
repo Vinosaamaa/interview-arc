@@ -75,6 +75,14 @@ export async function prepareChatgptImport(db: Database, owner: string, input: C
   }
   const recordUpdates: { record: ImportedPractice; oldHash: string | null }[] = [];
   const records: ImportedPractice[] = [];
+  let receiptBytes = new TextEncoder().encode(canonicalJson(input.packet)).length;
+  const addRecord = (record: ImportedPractice) => {
+    receiptBytes += new TextEncoder().encode(canonicalJson(record)).length;
+    // D1 limits a row including all text columns, not each column separately.
+    // Bound expansion before constructing a large receipt or starting writes.
+    if (receiptBytes > 1_500_000) throw new ChatgptImportError("The linked evidence is too large for one import receipt. Split it into smaller session packets while preserving source identities.", 413);
+    records.push(record);
+  };
   const reserved = new Set<string>();
   let corrections = false;
   const sessionUpdates: { sessionKey: string; oldHash: string | null; hash: string; payload: string }[] = [];
@@ -118,7 +126,7 @@ export async function prepareChatgptImport(db: Database, owner: string, input: C
     const value = { questionId, practiceDate, attempt, session: { sessionKey: session.sessionKey, timing: session.timing }, sources,
       snapshot: input.packet.snapshots.find((s) => s.snapshotId === attempt.snapshotId) ?? null };
     const hash = await importFingerprint({ ...value, status: reasons.length ? "pending" : "completed", reasons });
-    if (old && old.fingerprint === hash) { records.push(old); if (old.status === "completed") reserved.add(dayKey); continue; }
+    if (old && old.fingerprint === hash) { addRecord(old); if (old.status === "completed") reserved.add(dayKey); continue; }
     if (old) {
       corrections = true;
       if (old.status === "completed" && (reasons.length || old.questionId !== questionId || old.practiceDate !== practiceDate)) throw new ChatgptImportError("A completed import cannot be reopened, moved to another question/day, or downgraded by a smaller capture.");
@@ -127,7 +135,7 @@ export async function prepareChatgptImport(db: Database, owner: string, input: C
     const record: ImportedPractice = { ...value, activityId: old?.activityId ?? `chatgpt-${(await importFingerprint({ owner, attemptKey: attempt.attemptKey })).slice(0, 40)}`,
       attemptKey: attempt.attemptKey, revision: (old?.revision ?? 0) + 1, fingerprint: hash, status: reasons.length ? "pending" : "completed", reasons };
     if (record.status === "completed") reserved.add(dayKey);
-    records.push(record); recordUpdates.push({ record, oldHash: row?.fingerprint ?? null });
+    addRecord(record); recordUpdates.push({ record, oldHash: row?.fingerprint ?? null });
   }
   const warnings = [...input.packet.gaps, ...input.packet.sources.flatMap((s) => s.gaps), ...attempts.flatMap((a) => a.gaps)];
   if (input.packet.sessions.length > 1) warnings.push("Session totals are shown separately; overlap has not been ruled out, so no daily time total is inferred.");

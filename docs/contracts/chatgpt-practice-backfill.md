@@ -213,7 +213,9 @@ and optional `revision` reads exact owner-scoped content; default `GET` pages
 
 Requests are bounded to 1 MB, 100 attempts and 2,000 source turns. Accumulated
 source captures are bounded to 1.5 MB; use a new source key for a subsequent
-range when necessary. Split large daily exports into session packets. Runtime
+range when necessary. Expanded packet-plus-receipt evidence is also bounded to
+1.5 MB before writes, accounting for D1's whole-row limit. Split large daily
+exports or heavily overlapping captures into smaller session packets. Runtime
 semantic validation supplements the transport schema with graph, timing,
 identity and current-bank checks. Estimated/unknown time never enters live
 timer tables, and session totals never inflate question or daily totals.
