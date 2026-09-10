@@ -42,6 +42,8 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
   statement and save Java/Python drafts through Arc. Its explicit submission
   tool sends saved code to the connected LeetCode judge; the Arc website and
   Worker still do not execute code. Original questions have review only.
+  This is an external ChatGPT integration and a private draft editor, not an
+  embedded ChatGPT conversation or model runtime on the Arc website.
 - Past pages through bounded finalized-record metadata from D1. Load one exact
   transcript/review and its authenticated R2 assets only when opened.
 - Past contains every completed attempt, including failed work worth reviewing;

@@ -110,6 +110,7 @@ enabled_tools = [
   "get_coding_submission",
   "save_practice_drawing",
   "get_practice_drawing",
+  "get_practice_coaching_guide",
 ]
 startup_timeout_sec = 15.0
 tool_timeout_sec = 60.0

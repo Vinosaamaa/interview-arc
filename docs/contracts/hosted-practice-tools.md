@@ -28,6 +28,13 @@ available in every desktop app. Report the actual host result and use a local
 source editor or browser canvas when the host cannot render it. CLI agents can
 still call all read/save/submit tools without displaying the UI.
 
+Every draft response includes an authenticated `browserUrl`. In Codex desktop,
+open that URL in the app's browser pane when inline rendering is unavailable.
+It hosts the same editor and saves to the same owner-scoped draft. The owner
+then asks the agent to review; the agent reads the draft directly. The browser
+pane does not independently send chat messages or submit code. To change its
+language, ask the agent to open that language's draft. No Mac server is needed.
+
 For CLI/local-file editing, retain the existing single evolving source and
 local harness. Read its exact bytes, save them with `save_coding_draft`, verify
 the returned hash/revision, and review that source. Do not overwrite either

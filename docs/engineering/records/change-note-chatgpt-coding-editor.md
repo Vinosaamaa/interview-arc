@@ -83,3 +83,23 @@ specialist instructions prefer MCP while retaining the existing browser/local
 canvas fallback. The integration test reads the same private draft through both
 OAuth-owner and bearer-owner transports. A working MCP connection alone does
 not establish that a particular installed host renders the interactive UI.
+
+A private browser URL hosts the same resource for desktop browser panes when
+inline rendering is unavailable. Its same-origin authenticated API exposes
+only draft reads and saves, with revision guards; it never embeds a token or
+performs judge submissions. A browser fixture verifies load, edit, save and
+the explicit return-to-agent review handoff. Changing language in this fallback
+is opened by the agent, preserving separate language drafts.
+
+The same repository-owned interview skill, adaptive engine, specialty guides
+and Arc AGENTS.md are served verbatim to both text clients by a bounded,
+hash-checked coaching read. The integration test reassembles the selected
+documents and compares them to source files across both authenticated routes.
+A visible text-to-Live handoff carries coaching rules and relevant disclosed
+facts; it does not claim a private shared file or verified Voice tool support.
+
+Concurrent editor saves preserve local edits and offer an explicit comparison
+and recovery choice. A save racing judge authentication prevents reservation
+and any external POST. Source history and submission identities remain durable
+for exact-review provenance and retry deduplication; immutable problem metadata
+is stored once rather than repeated with every autosave.

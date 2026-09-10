@@ -5,6 +5,7 @@ import { registerChatgptTools } from "./chatgpt-tools";
 import { registerEditorialTools } from "./editorial-tools";
 import { registerLeetcodeTools } from "./leetcode-tools";
 import { registerCodingTools } from "./coding-tools";
+import { registerCoachingTools } from "./coaching-tools";
 import { registerDrawingTools } from "./drawing-tools";
 import { routeExcalidrawProxy } from "./excalidraw-proxy";
 import { resolveChatgptAccessOwner, type ChatgptAccessConfig } from "./chatgpt-access";
@@ -2618,6 +2619,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
   if (chatgpt) registerChatgptTools(server, env.DB, ownerId, (activityId) => readCurrentPracticeDesignCheckpoint(ownerId, activityId, env.AUDIO));
   registerLeetcodeTools(server, env.AUDIO, ownerId);
   registerCodingTools(server, env.DB, env.AUDIO, ownerId);
+  registerCoachingTools(server);
   registerDrawingTools(server, env.DB, env.AUDIO, ownerId);
 
   server.registerTool(

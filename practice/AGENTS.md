@@ -5,6 +5,14 @@ Read this file with the matching specialty guide. The repository root owns
 product/coordinator behavior; specialty-specific coaching belongs only in the
 matching `practice/<specialty>/AGENTS.md`.
 
+- Practice coaching → use the repository's
+  `.agents/skills/run-interview-practice/SKILL.md`, its adaptive engine and
+  selected specialty reference. This is the same source served to ChatGPT by
+  `get_practice_coaching_guide`; do not substitute a divergent personal copy.
+- Text-to-Live preparation → follow
+  `docs/contracts/practice-coaching-handoff.md`; local skills and hidden tool
+  results are not automatically a verified Voice handoff.
+
 Read these shared contracts only when the corresponding action is needed:
 
 - private finalization, Past/Solution separation, or drawing assets:

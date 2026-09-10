@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { importFingerprint } from "../db/chatgpt-import-policy.ts";
-import { type CodingDatabase, type CodingProblem, codingLanguage, draftKey, openCodingDraft, readCodingDraft, saveCodingDraft, saveCodingInput } from "../db/coding-drafts.ts";
+import { CodingDraftConflictError, type CodingDatabase, type CodingProblem, codingLanguage, draftKey, openCodingDraft, readCodingDraft, saveCodingDraft, saveCodingInput } from "../db/coding-drafts.ts";
 import { leetcodeQuery, requireLeetcodeCredential } from "./leetcode-account.ts";
 import { readCodingSubmission, submitCodingDraft } from "./coding-judge.ts";
 import { codingWidgetHtml, codingWidgetUri } from "./coding-widget.ts";
@@ -10,8 +10,8 @@ const read={readOnlyHint:true,destructiveHint:false,openWorldHint:false};
 const write={readOnlyHint:false,destructiveHint:false,openWorldHint:false};
 const uiMeta={ui:{visibility:["model","app"]},"openai/widgetAccessible":true};
 async function reply(work:()=>Promise<object>){
-  try{const data=await work();return {structuredContent:data,content:[{type:"text" as const,text:JSON.stringify(data)}]};}
-  catch(error){return {isError:true,content:[{type:"text" as const,text:error instanceof Error?error.message:"Coding operation failed."}]};}
+  try{const result=await work();const draft=(result as {draft?:{draftId:string}}).draft;const data={...result,...(draft?{browserUrl:`https://limitless.vinosama.workers.dev/coding-editor?draftId=${encodeURIComponent(draft.draftId)}`}:{})};return {structuredContent:data,content:[{type:"text" as const,text:JSON.stringify(data)}]};}
+  catch(error){return {isError:true,...(error instanceof CodingDraftConflictError?{structuredContent:{code:"draft_conflict",latest:error.latest}}:{}),content:[{type:"text" as const,text:error instanceof Error?error.message:"Coding operation failed."}]};}
 }
 export function registerCodingTools(server:McpServer,db:CodingDatabase,bucket:Pick<R2Bucket,"get"|"put"|"delete">,owner:string){
   server.registerResource("coding-editor",codingWidgetUri,{},async()=>({contents:[{uri:codingWidgetUri,mimeType:"text/html;profile=mcp-app",text:codingWidgetHtml,_meta:{ui:{prefersBorder:true,csp:{connectDomains:[],resourceDomains:["https://assets.leetcode.com"]}},"openai/widgetDescription":"Editable Java/Python practice code with the full problem statement, diagrams, private draft saves and review handoff."}}]}));

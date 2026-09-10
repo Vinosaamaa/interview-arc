@@ -6,6 +6,7 @@ import {Script} from 'node:vm';
 import {openCodingDraft,readCodingDraft,saveCodingDraft,codingSha256} from '../db/coding-drafts.ts';
 import {submitCodingDraft,readCodingSubmission} from '../mcp-worker/coding-judge.ts';
 import {codingWidgetHtml} from '../mcp-worker/coding-widget.ts';
+import {codingBrowserHtml} from '../mcp-worker/coding-browser.ts';
 
 function database(){
  const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync(new URL('../drizzle/0055_chatgpt_coding_drafts.sql',import.meta.url),'utf8'));
@@ -27,6 +28,8 @@ test('drafts preserve exact code and immutable revisions across reopen, replay a
  assert.equal(await readCodingDraft(db,'bob','draft'),null);
  assert.deepEqual(await readCodingDraft(db,'alice','draft',1),original);
  assert.equal((await openCodingDraft(db,'alice','draft','java',problem,'replacement')).code,input.code);
+ assert.equal(JSON.parse(sqlite.prepare('SELECT payload FROM coding_draft_revisions WHERE revision=2').get().payload).problem,undefined);
+ assert.deepEqual((await readCodingDraft(db,'alice','draft')).problem,problem);
  }finally{sqlite.close();}
 });
 test('submission sends the exact reviewed revision once and returns real judge fields',async()=>{
@@ -60,9 +63,22 @@ test('custom questions, stale revisions and expired authentication do not submit
  assert.equal(remote.posts.length,0);assert.equal(sqlite.prepare('SELECT count(*) AS n FROM coding_submissions').get().n,0);
  }finally{sqlite.close();}
 });
+test('a save racing authentication prevents reservation and any judge POST',async()=>{
+ const {sqlite,db}=database(),remote=judge();try{
+ await openCodingDraft(db,'alice','draft','java',problem,'class Solution {}');
+ const fetcher=async(url,init)=>{
+   if(url.endsWith('/graphql/'))await saveCodingDraft(db,'alice',{draftId:'draft',expectedRevision:1,operationId:'concurrent-edit',code:'class Solution { /* new edit */ }'});
+   return remote.fetch(url,init);
+ };
+ await assert.rejects(submitCodingDraft(db,'alice',{draftId:'draft',expectedRevision:1,operationId:'racing-submit'},credential,fetcher),/not reserved/);
+ assert.equal(remote.posts.length,0);assert.equal(sqlite.prepare('SELECT count(*) AS n FROM coding_submissions').get().n,0);
+ }finally{sqlite.close();}
+});
 test('coding resource script parses and remains self-contained',()=>{
  const script=codingWidgetHtml.match(/<script>([\s\S]*?)<\/script>/)[1];new Script(script);
  assert.match(codingWidgetHtml,/ui\/initialize/);assert.match(codingWidgetHtml,/ui\/message/);assert.match(codingWidgetHtml,/Your code/);assert.doesNotMatch(codingWidgetHtml,/<script\s+src=/);
+ new Script(codingBrowserHtml.match(/<script>([\s\S]*?)<\/script>/)[1]);
+ assert.doesNotMatch(codingBrowserHtml,/Bearer|INTERVIEW_ARC_MCP_TOKEN/);
 });
 test('judge completion requires a verdict and preserves compile errors',async()=>{
  const {sqlite,db}=database(),remote=judge();try{
