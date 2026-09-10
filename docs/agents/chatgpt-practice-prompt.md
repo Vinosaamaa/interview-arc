@@ -236,15 +236,17 @@ missing tools. Never present a generated image as an interactive MCP canvas.
   use `create_or_revise` and supply the full profile, not a transcript summary
   or an editorial-only addition. Preserve the existing profile when revising.
   Missing required material stays pending with a concrete reason.
-- Call `publish_practice_solutions` with a stable batch ID and 1–10 items below
-  1 MB. Bind each item to its exact activity, question, specialty, Practice
+- Call `publish_practice_solutions` with a stable batch ID and 1–10 items; the
+  entire batch must be below 1 MB and each item at most 768 KiB. Bind each item
+  to its exact activity, question, specialty, Practice
   Record revision/fingerprint and expected current Solution revision (0 when
   absent). For several attempts of one question, publish its profile once;
   after that succeeds, reuse its resulting revision for the remaining attempts.
 - After uncertainty, retry the identical batch ID and content. Read
-  `get_practice_solution_batch` until every item has a saved or failed receipt.
+  `get_practice_solution_batch` until every item is saved, failed or explicitly
+  not_queued after a terminal batch failure.
   Queued or processing means pending. Report each result independently; one
-  failure does not undo successful items. Correct only failed items using
+  failure does not undo successful items. Correct only failed or not_queued items using
   fresh guards and a new batch ID. Never restart practice or delete records
   to retry a Solution publication.
 - Once queued, Arc can finish persistence without the chat remaining open.

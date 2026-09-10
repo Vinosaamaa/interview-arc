@@ -29,7 +29,10 @@ export async function readImportedPractice(db: Database, owner: string, activity
     // Historical pending revisions can belong to a now-completed coding record.
     record.attempt.question.specialty === "leetcode" ? readPracticeEditorial(db, owner, activityId) : null,
     record.attempt.question.specialty === "system_design" ? readPracticeDrawing(db, owner, activityId) : null,
-    readPracticeSolutionPublication(db, owner, activityId),
+    readPracticeSolutionPublication(db, owner, activityId, undefined, {
+      practiceRevision: record.revision,
+      practiceFingerprint: record.fingerprint,
+    }),
   ]);
   return { ...record, editorial, drawing, solutionPublication, ...(session ? { currentSession: JSON.parse(session.payload) as NonNullable<ImportedPractice["currentSession"]> } : {}) };
 }

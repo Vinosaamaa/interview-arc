@@ -30,13 +30,19 @@ export default function ChatgptPractice({ MarkdownBody, refreshKey }: { Markdown
   const [page, setPage] = useState<Page | null>(null);
   const [pending, setPending] = useState<Page | null>(null);
   const [selected, setSelected] = useState<(ImportedPractice & { editorial?: PracticeEditorial | null; drawing?: PracticeDrawing | null; solutionPublication?: PracticeSolutionPublication | null }) | null>(null);
+  const loadedRequest = useRef<{ activityId: string; refreshKey: unknown } | null>(null);
   const selectedActivityId = selected?.activityId;
   useEffect(() => {
     if (!selectedActivityId) return;
+    if (loadedRequest.current?.activityId === selectedActivityId && loadedRequest.current.refreshKey === refreshKey) return;
     const controller = new AbortController();
     void fetch(`/api/chatgpt-practice?activityId=${encodeURIComponent(selectedActivityId)}`, { cache: "no-store", signal: controller.signal })
       .then(readJson<{ record: NonNullable<typeof selected> }>)
-      .then(({ record }) => setSelected(current => current?.activityId === selectedActivityId ? record : current))
+      .then(({ record }) => {
+        if (controller.signal.aborted) return;
+        loadedRequest.current = { activityId: selectedActivityId, refreshKey };
+        setSelected(current => current?.activityId === selectedActivityId ? record : current);
+      })
       .catch(e => { if (e.name !== "AbortError") setError(e.message); });
     return () => controller.abort();
   }, [selectedActivityId, refreshKey]);
@@ -82,7 +88,11 @@ export default function ChatgptPractice({ MarkdownBody, refreshKey }: { Markdown
   }
   async function openRecord(activityId: string) {
     setError("");
-    try { setSelected((await fetch(`/api/chatgpt-practice?activityId=${encodeURIComponent(activityId)}`, { cache: "no-store" }).then(readJson<{ record: ImportedPractice }>)).record); }
+    try {
+      const { record } = await fetch(`/api/chatgpt-practice?activityId=${encodeURIComponent(activityId)}`, { cache: "no-store" }).then(readJson<{ record: NonNullable<typeof selected> }>);
+      loadedRequest.current = { activityId, refreshKey };
+      setSelected(record);
+    }
     catch (e) { setError((e as Error).message); }
   }
   function correctRecord(record: ImportedPractice) {

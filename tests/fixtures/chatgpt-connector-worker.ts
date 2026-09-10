@@ -1,6 +1,8 @@
 // Synthetic authentication provider used only by the isolated local test.
 import worker from "../../mcp-worker/index";
 import { GET as readImportedPracticeRoute } from "../../app/api/chatgpt-practice/route";
+import { solutionItemJobId } from "../../mcp-worker/solution-publication-tools";
+import { resolveOwnerId } from "../../db/owner";
 const issuer = "https://synthetic-arc-worker.cloudflareaccess.com";
 let pair: CryptoKeyPair;
 let publicKey: JsonWebKey;
@@ -36,6 +38,14 @@ const base64 = (value: string | Uint8Array) => btoa(typeof value === "string" ? 
 const syntheticWorker = {
   async fetch(request: Request, env: Parameters<typeof worker.fetch>[1], ctx: ExecutionContext) {
     await prepareSigningKey(env.DB);
+    if (new URL(request.url).pathname === "/fixture/reserve-conflicting-solution-child" && request.method === "POST") {
+      const owner = await resolveOwnerId(new Request(request.url, { headers: { "x-interview-arc-authenticated-email": "synthetic@example.test" } }));
+      const jobId = await solutionItemJobId("synthetic-interrupted-batch", "native-attempt");
+      await env.DB.prepare(`INSERT INTO specialist_write_jobs(owner_id,job_id,operation,payload_hash,payload,status,error_code,error_message,error_retryable,created_at,updated_at,completed_at)
+        VALUES(?,?,'practice_solution_publication','synthetic-conflicting-content','{}','failed','synthetic_existing_failure','Synthetic pre-existing failed write.',0,1,1,1)`)
+        .bind(owner, jobId).run();
+      return Response.json({ jobId });
+    }
     if (new URL(request.url).pathname === "/fixture/imported-reader") {
       // Exercise the actual website route for the fixed synthetic owner. The
       // production website supplies this trusted header after Access auth.

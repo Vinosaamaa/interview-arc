@@ -115,6 +115,41 @@ test("native completion supports later revisions, exact retries after advancemen
   } finally { sqlite.close(); }
 });
 
+test("imported readers show only solution publications bound to their exact practice revision and fingerprint", async () => {
+  const { db, sqlite } = database();
+  try {
+    const input = await imported(db);
+    const original = await readImportedPractice(db, "alice", input.activityId);
+    const first = await savePracticeSolutionPublication(db, "alice", input, 1);
+    const correction = chatgptImportRequestSchema.parse({ action: "preview", packet: {
+      schemaVersion: 1, kind: "practice_export", packetId: "corrected-practice", exportedAt: null, timeZone: "America/Los_Angeles",
+      snapshots: original.snapshot ? [original.snapshot] : [], sources: original.sources, gaps: [],
+      sessions: [{ ...original.session, attempts: [{ ...original.attempt, summary: "Corrected synthetic practice summary with original evidence preserved." }] }],
+    } });
+    const catalog = [{ specialty: input.specialty, questionId: input.questionId, title: original.attempt.question.title, active: true }];
+    const { preview } = await prepareChatgptImport(db, "alice", correction, catalog);
+    const revised = (await applyChatgptImport(db, "alice", { ...correction, action: "apply", previewToken: preview.previewToken, confirmCorrections: true }, catalog)).records[0];
+    assert.equal(revised.revision, 2);
+    assert.notEqual(revised.fingerprint, original.fingerprint);
+    assert.equal((await readImportedPractice(db, "alice", input.activityId)).solutionPublication, null);
+    const second = await savePracticeSolutionPublication(db, "alice", {
+      ...input, operationId: "corrected-solution", expectedPracticeRevision: revised.revision,
+      expectedPracticeFingerprint: revised.fingerprint, expectedSolutionRevision: 1,
+      solutionProfile: { ...profile(), summary: prose("revisedsummary", 25) },
+    }, 2);
+    assert.deepEqual((await readImportedPractice(db, "alice", input.activityId)).solutionPublication, second.publication);
+    assert.deepEqual((await readImportedPractice(db, "alice", input.activityId, 2)).solutionPublication, second.publication);
+    assert.deepEqual((await readImportedPractice(db, "alice", input.activityId, 1)).solutionPublication, first.publication);
+    assert.deepEqual(await readPracticeSolutionPublication(db, "alice", input.activityId), second.publication);
+    assert.equal(await readPracticeSolutionPublication(db, "alice", input.activityId, undefined, {
+      practiceRevision: 1, practiceFingerprint: revised.fingerprint,
+    }), null);
+    const old = await readImportedPractice(db, "alice", input.activityId, 1);
+    assert.equal(old.attempt.summary, original.attempt.summary);
+    assert.equal(old.fingerprint, original.fingerprint);
+  } finally { sqlite.close(); }
+});
+
 test("wrong owner, source revision, identity, missing current, and shallow profiles cannot mutate solutions", async () => {
   const { db, sqlite } = database();
   try {

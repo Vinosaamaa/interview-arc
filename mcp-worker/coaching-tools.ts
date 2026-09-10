@@ -34,7 +34,7 @@ const documents = {
   "solutions": { path: "docs/contracts/solution-profiles.md", text: document14 },
   "publication": { path: "docs/contracts/practice-solution-publication.md", text: document15 },
 };
-const documentId = z.enum(["skill","engine","evaluation","behavioral","system-design","coding","shared","behavioral-arc","system-design-arc","coding-arc","design-skill","design-preflight","design-solution","handoff","solutions","publication"]);
+const documentId = z.enum(Object.keys(documents) as [keyof typeof documents, ...(keyof typeof documents)[]]);
 export function registerCoachingTools(server: McpServer) {
   server.registerTool("get_practice_coaching_guide", {
     title: "Read shared practice coaching",

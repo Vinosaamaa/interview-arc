@@ -83,9 +83,16 @@ async function verifyPublication(db: Database, owner: string, publication: Pract
   return publication;
 }
 
-export async function readPracticeSolutionPublication(db: Database, owner: string, activityId: string, revision?: number) {
-  const row = await db.prepare(`SELECT payload FROM practice_solution_publications WHERE owner_id=? AND activity_id=?${revision === undefined ? " ORDER BY revision DESC LIMIT 1" : " AND revision=?"}`)
-    .bind(owner, activityId, ...(revision === undefined ? [] : [revision])).first<{ payload: string }>();
+export async function readPracticeSolutionPublication(
+  db: Database,
+  owner: string,
+  activityId: string,
+  revision?: number,
+  practiceRecord?: Pick<PracticeSolutionPublication, "practiceRevision" | "practiceFingerprint">,
+) {
+  const recordFilter = practiceRecord ? " AND json_extract(payload,'$.practiceRevision')=? AND json_extract(payload,'$.practiceFingerprint')=?" : "";
+  const row = await db.prepare(`SELECT payload FROM practice_solution_publications WHERE owner_id=? AND activity_id=?${recordFilter}${revision === undefined ? " ORDER BY revision DESC LIMIT 1" : " AND revision=?"}`)
+    .bind(owner, activityId, ...(practiceRecord ? [practiceRecord.practiceRevision, practiceRecord.practiceFingerprint] : []), ...(revision === undefined ? [] : [revision])).first<{ payload: string }>();
   if (!row) return null;
   const publication = JSON.parse(row.payload) as PracticeSolutionPublication;
   if (publication.activityId !== activityId || (revision !== undefined && publication.revision !== revision)) {
@@ -180,14 +187,15 @@ export async function savePracticeSolutionPublication(
   if (input.action === "reuse_current" && !current) {
     throw new PracticeSolutionPublicationError("solution_publication_profile_missing", "There is no owner-private current Solution Profile to reuse.");
   }
+  const currentProfile = current ? JSON.parse(current.payload) as Profile : null;
   const profile: Profile = input.action === "reuse_current"
-    ? JSON.parse(current!.payload) : normalizedSolutionProfile(input.solutionProfile, input.solutionProfile.references);
+    ? currentProfile! : normalizedSolutionProfile(input.solutionProfile, input.solutionProfile.references);
   validateSolutionProfile(input.specialty, profile, binding, input.questionId, canonicalProblemUrl);
-  const unchanged = current && canonicalJson(JSON.parse(profileFingerprint(JSON.parse(current.payload) as Profile)))
+  const unchanged = currentProfile && canonicalJson(JSON.parse(profileFingerprint(currentProfile)))
     === canonicalJson(JSON.parse(profileFingerprint(profile)));
   const reuse = input.action === "reuse_current" || Boolean(unchanged);
   const solutionRevision = reuse ? current!.current_revision : input.expectedSolutionRevision + 1;
-  const savedProfile: Profile = reuse ? JSON.parse(current!.payload) : profile;
+  const savedProfile: Profile = reuse ? currentProfile! : profile;
   // Equal semantic content reuses the exact old bytes, including provenance.
   const publication: PracticeSolutionPublication = {
     operationId: input.operationId, activityId: input.activityId, revision: (latest?.revision ?? 0) + 1,

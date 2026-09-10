@@ -32,6 +32,11 @@ fresh expected revisions. An unavailable owner profile cannot be silently
 reused. Multiple activities of one question should author once, then reuse
 the resulting revision in the next batch.
 
+Batch reads derive expected children from the reserved payload even if fan-out
+was interrupted. Already queued receipts stay visible. After a terminal parent
+failure, children never enqueued are explicitly `not_queued`; queued siblings
+may still finish. Retry failed or not-queued work without repeating successes.
+
 The worker does not invoke a model or research sources. The connected text
 agent prepares full Solutions from the shared specialty contract before
 enqueue. Day-end record capture uses existing native finalization or multi-

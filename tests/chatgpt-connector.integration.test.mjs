@@ -255,5 +255,33 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     const changedBatch = structuredClone(batch); changedBatch.items[0].expectedSolutionRevision = 1;
     assert.equal((await client.callTool({ name: "publish_practice_solutions", arguments: changedBatch })).isError, true);
     assert.deepEqual(await (await fetch(`${base}/fixture/immutable-practice`)).json(), originalFingerprints);
+
+    const conflictingChild = await (await fetch(`${base}/fixture/reserve-conflicting-solution-child`, { method: "POST" })).json();
+    const interruptedBatch = { batchId: "synthetic-interrupted-batch", items: batch.items.map(item => {
+      const reuse = { ...item, expectedSolutionRevision: 1, action: "reuse_current" };
+      delete reuse.solutionProfile;
+      return reuse;
+    }) };
+    const interruptedQueued = await client.callTool({ name: "publish_practice_solutions", arguments: interruptedBatch });
+    assert.equal(interruptedQueued.isError, undefined, JSON.stringify(interruptedQueued));
+    assert.equal(interruptedQueued.structuredContent.items.length, 3);
+    let interruptedResult;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      assert.equal((await fetch(`${base}/fixture/scheduled`, { method: "POST" })).status, 200);
+      const status = await client.callTool({ name: "get_practice_solution_batch", arguments: { batchId: interruptedBatch.batchId } });
+      assert.equal(status.isError, undefined, JSON.stringify(status));
+      interruptedResult = status.structuredContent;
+      if (interruptedResult.batchReceipt.status === "failed" && interruptedResult.items[0]?.receipt?.status === "saved") break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.equal(interruptedResult.status, "failed", JSON.stringify(interruptedResult));
+    assert.equal(interruptedResult.batchReceipt.failure.code, "specialist_write_identity_conflict");
+    assert.deepEqual(interruptedResult.items.map(item => item.state), ["saved", "failed", "not_queued"]);
+    assert.deepEqual(interruptedResult.items.slice(0, 2).map(item => item.receipt.status), ["saved", "failed"]);
+    assert.equal(interruptedResult.items[2].receipt, null);
+    assert.equal(interruptedResult.items[0].receipt.result.publication.action, "reused");
+    assert.equal(interruptedResult.items[1].jobId, conflictingChild.jobId);
+    assert.equal(interruptedResult.items[1].receipt.failure.code, "synthetic_existing_failure");
+    assert.deepEqual(await (await fetch(`${base}/fixture/immutable-practice`)).json(), originalFingerprints);
   } finally { if (client) await client.close(); await stopMcpWorker(worker?.child); await rm(persistence, { recursive: true, force: true }); await release(); }
 });

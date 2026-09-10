@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { SpecialistFinalization } from "../db/durable-practice";
 import type { PracticeSolutionPublicationInput } from "../db/practice-solution-publication";
-import { enqueueSpecialistWriteJob, readSpecialistWriteJobs, type SpecialistWriteReceipt } from "../db/specialist-write-jobs";
+import { enqueueSpecialistWriteJob, readSpecialistWriteJobs, readSpecialistWriteJobPayload, type SpecialistWriteReceipt } from "../db/specialist-write-jobs";
 import { specialistWritePayloadDigest } from "./specialist-write-policy";
 
 type WithoutOperation<T> = T extends unknown ? Omit<T, "operationId"> : never;
@@ -30,10 +30,12 @@ export async function enqueueSolutionBatchItems(ownerId: string, batch: Solution
   return { batchId: batch.batchId, items };
 }
 
-export function summarizeSolutionBatch(parent: SpecialistWriteReceipt, children: SpecialistWriteReceipt[]) {
-  const manifest = parent.result as { items?: { activityId: string; jobId: string }[] } | null;
+export function summarizeSolutionBatch(parent: SpecialistWriteReceipt, children: SpecialistWriteReceipt[], manifest: { items: { activityId: string; jobId: string }[] }) {
   const byId = new Map(children.map(item => [item.jobId, item]));
-  const items = (manifest?.items ?? []).map(item => ({ ...item, receipt: byId.get(item.jobId) ?? null }));
+  const items = manifest.items.map(item => {
+    const receipt = byId.get(item.jobId) ?? null;
+    return { ...item, state: receipt?.status ?? (parent.status === "failed" ? "not_queued" : "pending"), receipt };
+  });
   const settled = items.length > 0 && items.every(item => item.receipt && ["saved", "failed"].includes(item.receipt.status));
   const status = parent.status === "failed" ? "failed"
     : !settled ? "pending"
@@ -44,9 +46,12 @@ export function summarizeSolutionBatch(parent: SpecialistWriteReceipt, children:
 export async function readSolutionBatch(ownerId: string, batchId: string) {
   const [parent] = await readSpecialistWriteJobs(ownerId, [await solutionBatchJobId(batchId)]);
   if (!parent || parent.operation !== "practice_solution_batch") throw new Error("No solution batch belongs to this owner and ID.");
-  const manifest = parent.result as { items?: { jobId: string }[] } | null;
-  const children = await readSpecialistWriteJobs(ownerId, (manifest?.items ?? []).map(item => item.jobId));
-  return { batchId, ...summarizeSolutionBatch(parent, children) };
+  // The reserved payload exists before fan-out. Read it even if expansion was
+  // interrupted, so already queued children never disappear behind parent state.
+  const batch = await readSpecialistWriteJobPayload(ownerId, parent.jobId) as SolutionPublicationBatch;
+  const items = await Promise.all(batch.items.map(async item => ({ activityId: item.activityId, jobId: await solutionItemJobId(batchId, item.activityId) })));
+  const children = await readSpecialistWriteJobs(ownerId, items.map(item => item.jobId), true);
+  return { batchId, ...summarizeSolutionBatch(parent, children, { items }) };
 }
 
 export function registerSolutionPublicationTools(
@@ -67,7 +72,7 @@ export function registerSolutionPublicationTools(
   });
   server.registerTool("publish_practice_solutions", {
     title: "Publish practice solutions",
-    description: "Durably queue full reusable solutions for one or up to ten already-saved native or imported practices. Save new day-end attempts first with preview/apply_practice_backfill, then use their exact record revision/fingerprint and current Solution revision (0 if absent). Author the complete specialty-quality profile before enqueue; the Worker persists supplied content and does not research or write missing solutions. Use reuse_current when no revision is needed. Reuse exact batchId/items after uncertainty. Each item has an independent receipt; original practice history is never rewritten. Poll get_practice_solution_batch until each item is saved or failed; queued is not published.",
+    description: "Durably queue full reusable solutions for one or up to ten already-saved native or imported practices. Save new day-end attempts first with preview/apply_practice_backfill, then use their exact record revision/fingerprint and current Solution revision (0 if absent). Author the complete specialty-quality profile before enqueue; the Worker persists supplied content and does not research or write missing solutions. Use reuse_current when no revision is needed. Reuse exact batchId/items after uncertainty. Each item has an independent receipt; original practice history is never rewritten. Poll get_practice_solution_batch until each item is saved, failed, or not_queued after terminal parent failure; queued is not published.",
     inputSchema: { batchId: z.string().trim().min(1).max(200), items: z.array(item).min(1).max(10) },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   }, async (batch) => {
@@ -85,7 +90,7 @@ export function registerSolutionPublicationTools(
     }
   });
   server.registerTool("get_practice_solution_batch", {
-    description: "Read one owner's durable solution-publication batch and every per-item receipt. A saved batch manifest alone is not completion; inspect aggregate status and each child's saved/failed/pending result. Retry only failed items with corrected payloads, fresh expected revisions and a new batch ID; preserve successful receipts.",
+    description: "Read one owner's durable solution-publication batch and every per-item receipt, including interrupted expansion. A saved manifest alone is not completion. Inspect each item's state and receipt: saved, failed, pending work, or not_queued after terminal parent failure. Queued siblings can still finish after parent failure. Retry failed or not_queued items with corrected payloads, fresh expected revisions and a new batch ID; preserve successes.",
     inputSchema: { batchId: z.string().trim().min(1).max(200) },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async ({ batchId }) => {
