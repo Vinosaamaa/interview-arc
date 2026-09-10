@@ -11,6 +11,8 @@ export async function GET(request: Request) {
     const record = await readActivityPracticeRecord(ownerId, activityId);
     return Response.json({
       finalization: record.finalization,
+      interactionModeClassification: record.interactionModeClassification,
+      interactionModeTransitions: record.interactionModeTransitions,
       finalAnswer: record.finalAnswer,
       finalAnswerMarkdown: record.finalAnswerMarkdown,
       finalAnswerHtml: record.finalAnswerHtml,
@@ -85,6 +87,8 @@ export async function GET(request: Request) {
       })),
       practiceRecord: record.practiceRecord,
       practiceAssets: record.practiceAssets,
+      drawingAddition: record.drawingAddition,
+      editorialAddition: record.editorialAddition,
     }, { headers: { "cache-control": "private, no-store" } });
   } catch (error) {
     return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });

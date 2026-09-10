@@ -4775,6 +4775,9 @@ export default function HomeClient({ content, today, engineering, initialLocatio
       window.sessionStorage.setItem("interview-arc-selected-past", selectedEntry.id);
       return;
     }
+    // An explicit record URL owns selection, including while hydration is
+    // resolving it. Do not race its selection with a remembered older record.
+    if (readPastReaderState(window.location.href)) return;
     const storedId = window.sessionStorage.getItem("interview-arc-selected-past");
     const stored = storedId ? libraryEntries.find((entry) => entry.id === storedId) : undefined;
     if (!stored) return;

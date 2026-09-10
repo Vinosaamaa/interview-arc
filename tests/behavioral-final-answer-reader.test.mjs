@@ -3,6 +3,13 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { findExactPastSnapshot, orderPastReaderSections, retainLoadedPastSnapshot } from "../app/behavioral-final-answer-view.ts";
 
+test("same-record refresh reveals newly published additions without regressing loaded revisions", () => {
+  const absent = { id: "attempt", drawingAddition: null, editorialAddition: null };
+  const present = { id: "attempt", drawingAddition: { revision: 2 }, editorialAddition: { revision: 3 } };
+  assert.deepEqual(retainLoadedPastSnapshot(absent, present), present);
+  assert.deepEqual(retainLoadedPastSnapshot(present, { ...absent, drawingAddition: { revision: 1 } }), present);
+});
+
 test("reselecting the same Past item keeps its loaded conversation evidence", () => {
   const loaded = {
     id: "attempt-1",
@@ -10,6 +17,10 @@ test("reselecting the same Past item keeps its loaded conversation evidence", ()
     transcriptTurns: [{ turnId: "turn-1" }],
     audioClips: [{ captureId: "capture-1" }],
     codeAttempts: [{ id: "code-1" }],
+    practiceRecord: { revision: 1 },
+    practiceAssets: [],
+    drawingAddition: { revision: 2 },
+    editorialAddition: { revision: 3 },
   };
   const listProjection = { id: "attempt-1", title: "Fresh list title" };
   assert.deepEqual(retainLoadedPastSnapshot(loaded, listProjection), {
@@ -25,6 +36,8 @@ test("practice-record API returns the immutable snapshot projection and export f
   const route = await readFile(new URL("app/api/practice-record/route.ts", root), "utf8");
   for (const field of [
     "finalization: record.finalization",
+    "drawingAddition: record.drawingAddition",
+    "editorialAddition: record.editorialAddition",
     "finalAnswer: record.finalAnswer",
     "finalAnswerMarkdown: record.finalAnswerMarkdown",
     "finalAnswerHtml: record.finalAnswerHtml",
