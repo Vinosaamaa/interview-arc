@@ -368,6 +368,8 @@ type LogEntry = {
   } | null;
   interactionModeTransitions?: InteractionModeTransitionProjection[];
   practiceRecord?: PracticeRecordWriteReceipt | null;
+  drawingAddition?: import("../db/practice-drawing").PracticeDrawing | null;
+  editorialAddition?: import("../db/practice-editorial").PracticeEditorial | null;
   practiceAssets?: Array<{
     assetId: string;
     revision: number;
@@ -1325,7 +1327,13 @@ function PracticeRecordProblem({ record }: { record: PracticeRecordWriteReceipt 
 }
 
 function PracticeRecordSummary({ record }: { record: PracticeRecordWriteReceipt }) {
-  return <section className="practice-record-section" id="case-attempt-summary"><h3>Attempt Summary</h3><MarkdownBody source={record.payload.summary} /></section>;
+  return <section className="practice-record-section" id="case-attempt-summary"><h3>Attempt Summary</h3><MarkdownBody source={record.payload.summary} />{record.payload.referencePending && <aside aria-label="Reference pending"><h4>Practice saved · reference pending</h4><p>{record.payload.referencePending.reason}</p><p>Editorials and drawings added later appear below. The original practice record remains unchanged.</p></aside>}</section>;
+}
+
+function PracticeRecordAdditions({ entry }: { entry: LogEntry }) {
+  const drawing = entry.drawingAddition;
+  const editorial = entry.editorialAddition;
+  return <>{drawing && <section className="practice-record-section" aria-label="Saved drawing"><h3>Saved drawing</h3><p>{drawing.authorship === "owner" ? "Your drawing" : "AI-generated reference"} · Revision {drawing.revision}</p><p><a href={drawing.url} target="_blank" rel="noreferrer">Open diagram in Excalidraw ↗</a> · <a href={drawing.downloadUrl}>Download editable drawing</a></p><p>Saved snapshot; later canvas edits require another export.</p></section>}{editorial && <section className="practice-record-section" aria-label="Editorial added after practice"><h3>Editorial added after practice</h3><p><a href={editorial.editorialUrl} target="_blank" rel="noreferrer">Official editorial ↗</a> · Addition revision {editorial.revision}</p><MarkdownBody source={editorial.explanation} /></section>}</>;
 }
 
 function PracticeRecordReview({ record }: { record: PracticeRecordWriteReceipt }) {
@@ -1351,7 +1359,7 @@ function PracticeRecordTechnicalAudit({ record }: { record: PracticeRecordWriteR
     <div><dt>Transcript</dt><dd>Revision {audit.transcriptRevision} · {audit.transcriptTurnCount} turns</dd></div>
     <div><dt>Transcript bounds</dt><dd><code>{audit.firstTurnId ?? "none"}</code> → <code>{audit.lastTurnId ?? "none"}</code></dd></div>
     <div><dt>Notes</dt><dd>{audit.notesRevision === null ? "No linked note revision" : `Revision ${audit.notesRevision}`}</dd></div>
-    <div><dt>Solution at completion</dt><dd>Revision {audit.solutionRevisionAtCompletion}</dd></div>
+    <div><dt>Solution at completion</dt><dd>{audit.solutionRevisionAtCompletion === null ? "Reference pending at completion" : `Revision ${audit.solutionRevisionAtCompletion}`}</dd></div>
     <div><dt>Code attempts</dt><dd>{audit.codeAttemptCount}</dd></div>
     <div><dt>Assets</dt><dd>{audit.assetCount}</dd></div>
     <div><dt>References</dt><dd>{audit.referenceCount}</dd></div>
@@ -6726,6 +6734,8 @@ export default function HomeClient({ content, today, engineering, initialLocatio
         interactionModeClassification: LogEntry["interactionModeClassification"];
         interactionModeTransitions: InteractionModeTransitionProjection[];
         practiceRecord: PracticeRecordWriteReceipt | null;
+        drawingAddition: LogEntry["drawingAddition"];
+        editorialAddition: LogEntry["editorialAddition"];
         practiceAssets: NonNullable<LogEntry["practiceAssets"]>;
       }> : null)
       .then((record) => {
@@ -6735,7 +6745,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
           codeAttempts: record.codeAttempts.length,
         });
         const enrich = (current: LogEntry | null) => current && (current.artifact?.activityId || current.id) === selectedEntryActivityId
-          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses, codeAttempts: record.codeAttempts, finalAnswer: record.finalAnswer, practiceScenarios: record.practiceScenarios, behavioralAnalysis: record.behavioralAnalysis, resumeContext: record.resumeContext, interactionModeClassification: record.interactionModeClassification, interactionModeTransitions: record.interactionModeTransitions, practiceRecord: record.practiceRecord, practiceAssets: record.practiceAssets }
+          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses, codeAttempts: record.codeAttempts, finalAnswer: record.finalAnswer, practiceScenarios: record.practiceScenarios, behavioralAnalysis: record.behavioralAnalysis, resumeContext: record.resumeContext, interactionModeClassification: record.interactionModeClassification, interactionModeTransitions: record.interactionModeTransitions, practiceRecord: record.practiceRecord, practiceAssets: record.practiceAssets, drawingAddition: record.drawingAddition, editorialAddition: record.editorialAddition }
           : current;
         if (view === "banks") setBankNestedEntry(enrich);
         else if (view === "journey") setJourneyNestedEntry(enrich);
@@ -7015,7 +7025,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
       if (section === "code_attempts") return <details className="reader-group code-attempts-group" id="case-code-attempts" open={readerGroupOpen("case-code-attempts", true)} onToggle={(event) => rememberReaderGroup("case-code-attempts", event.currentTarget.open)} key={section}><summary><span>Code Attempts</span><small>{selectedEntryCodeAttempts.length} exact owner submission{selectedEntryCodeAttempts.length === 1 ? "" : "s"}</small></summary><div>{selectedEntryCodeAttempts.length ? selectedEntryCodeAttempts.map((attempt) => <article className="code-attempt-card" key={attempt.id}><header><strong>Code Attempt {attempt.sequence} · {attempt.language}</strong><span>{attempt.lineCount} lines</span></header><CodeAttemptBody attempt={attempt} /></article>) : <p className="practice-record-integrity-error" role="alert">No authoritative owner code submission is linked to this attempt. The reader will not substitute reference code.</p>}</div></details>;
       if (section === "final_answer") return <details className="reader-group final-answer-group" id="case-final-answer" open={readerGroupOpen("case-final-answer", true)} onToggle={(event) => rememberReaderGroup("case-final-answer", event.currentTarget.open)} key={section}><summary><span>Final Tailored Answer</span><small>Exact completion snapshot</small></summary><div><PracticeRecordResponseStages stages={selectedEntryPracticeRecord.payload.specialtyOutput.responseStages} />{selectedEntryFinalAnswer ? <FinalAnswerCard finalAnswer={selectedEntryFinalAnswer} /> : <p className="practice-record-integrity-error" role="alert">The immutable record references a final answer that is not available. Reload the record before relying on it.</p>}</div></details>;
       if (section === "your_design") return <details className="reader-group your-design-group" id="case-your-design" open={readerGroupOpen("case-your-design", true)} onToggle={(event) => rememberReaderGroup("case-your-design", event.currentTarget.open)} key={section}><summary><span>Your Design</span><small>Owner decisions and original drawing</small></summary><div><PracticeRecordResponseStages stages={selectedEntryPracticeRecord.payload.specialtyOutput.responseStages} /><PracticeRecordAssets assets={selectedEntryPracticeAssets} /></div></details>;
-      if (section === "activity_review") return <PracticeRecordReview record={selectedEntryPracticeRecord} key={section} />;
+      if (section === "activity_review") return <Fragment key={section}><PracticeRecordReview record={selectedEntryPracticeRecord} /><PracticeRecordAdditions entry={selectedEntry} /></Fragment>;
       return <PracticeRecordTechnicalAudit record={selectedEntryPracticeRecord} key={section} />;
     }) : null;
     return (

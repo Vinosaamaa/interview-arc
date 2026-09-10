@@ -543,7 +543,7 @@ export const practiceRecords = sqliteTable(
     completedAt: integer("completed_at").notNull(),
     practiceDate: text("practice_date").notNull(),
     outcome: text("outcome", { enum: ["solved", "solved_after_reviewing_approach", "failed"] }),
-    solutionRevision: integer("solution_revision").notNull(),
+    solutionRevision: integer("solution_revision"),
     recordFingerprint: text("record_fingerprint").notNull(),
     finalizationOperationId: text("finalization_operation_id").notNull(),
     updatedAt,

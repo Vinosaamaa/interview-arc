@@ -18,7 +18,7 @@ test("publishing retains editable bytes, image data and immutable owner-scoped d
   const bytes=await readDrawingFile(db,bucket,"alice","activity",1);assert.deepEqual(JSON.parse(new TextDecoder().decode(bytes)),f.source);
   assert.equal((await savePracticeDrawing(db,bucket,"alice",input,()=>{throw Error("must not refetch");})).duplicate,true);
   await assert.rejects(savePracticeDrawing(db,bucket,"alice",{...input,authorship:"assistant_reference"},f.fetcher),/different/);
-  await assert.rejects(savePracticeDrawing(db,bucket,"alice",{...input,operationId:"stale"},f.fetcher),/not confirmed/);
+  await assert.rejects(savePracticeDrawing(db,bucket,"alice",{...input,operationId:"stale"},()=>{throw Error("Stale saves must not fetch or upload");}),/revision changed/);
   const next=await savePracticeDrawing(db,bucket,"alice",{...input,operationId:"revision2",expectedRevision:1,authorship:"assistant_reference"},f.fetcher);assert.equal(next.drawing.revision,2);assert.equal((await readPracticeDrawing(db,"alice","activity",1)).authorship,"owner");
   store.set([...store.keys()][0],new Uint8Array(bytes.byteLength));await assert.rejects(readDrawingFile(db,bucket,"alice","activity",1),/integrity/);
  }finally{sqlite.close();}

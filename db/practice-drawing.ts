@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { canonicalJson, importFingerprint } from "./chatgpt-import-policy.ts";
 import { readExcalidrawLink } from "../mcp-worker/excalidraw-link.ts";
+import { completedPracticeTargets } from "./practice-addition-target.ts";
 type Database=Pick<D1Database,"prepare"|"batch">;
 type Bucket=Pick<R2Bucket,"get"|"put">;
 export const drawingInput=z.object({operationId:z.string().min(1).max(240),activityId:z.string().min(1).max(240),expectedRevision:z.number().int().min(0),url:z.string().max(512),authorship:z.enum(["owner","assistant_reference"])}).strict();
@@ -21,7 +22,9 @@ export async function savePracticeDrawing(db:Database,bucket:Bucket,owner:string
   async function replay(){const row=await db.prepare("SELECT request_fingerprint,payload FROM practice_drawing_additions WHERE owner_id=? AND operation_id=?").bind(owner,input.operationId).first<{request_fingerprint:string;payload:string}>();if(!row)return null;if(row.request_fingerprint!==fingerprint)throw new Error("This drawing operation already belongs to different content.");const drawing=JSON.parse(row.payload) as Stored;await readDrawingFile(db,bucket,owner,drawing.activityId,drawing.revision);return {saved:true,duplicate:true,drawing:await readPracticeDrawing(db,owner,drawing.activityId,drawing.revision)};}
   const prior=await replay();if(prior)return prior;
   const eligible="owner_id=? AND activity_id=? AND specialty='system_design' AND status='completed'";
-  if(!await db.prepare(`SELECT activity_id FROM chatgpt_import_records WHERE ${eligible}`).bind(owner,input.activityId).first())throw new Error("Save the completed imported system-design practice before attaching its drawing.");
+  if(!await db.prepare(`SELECT activity_id FROM ${completedPracticeTargets} WHERE ${eligible}`).bind(owner,input.activityId).first())throw new Error("Save the completed system-design Practice Record before attaching its drawing.");
+  const latest=await readPracticeDrawing(db,owner,input.activityId);
+  if((latest?.revision??0)!==input.expectedRevision)throw new Error("Drawing revision changed. Read the latest drawing before saving; nothing was uploaded.");
   const snapshot=await readExcalidrawLink({url:input.url},fetcher,true);if(!snapshot.sourceScene)throw new Error("Snapshot source unavailable.");
   const bytes=new TextEncoder().encode(snapshot.sourceScene);const sha256=Buffer.from(await crypto.subtle.digest("SHA-256",bytes)).toString("hex");
   const objectKey=`private-practice-drawings/${await importFingerprint(owner)}/${await importFingerprint(input.activityId)}/${sha256}.excalidraw`;
@@ -29,7 +32,7 @@ export async function savePracticeDrawing(db:Database,bucket:Bucket,owner:string
   const drawing:Stored={activityId:input.activityId,revision,url:input.url,authorship:input.authorship,sha256,byteSize:bytes.length,elementCount:snapshot.elementCount,createdAt:now,objectKey,downloadUrl:`/api/chatgpt-practice/drawing?activityId=${encodeURIComponent(input.activityId)}&revision=${revision}`};
   await bucket.put(objectKey,bytes,{httpMetadata:{contentType:"application/vnd.excalidraw+json",cacheControl:"private, no-store"}});
   try {await db.batch([
-    db.prepare(`SELECT json(CASE WHEN COALESCE((SELECT MAX(revision) FROM practice_drawing_additions WHERE owner_id=? AND activity_id=?),0)=? AND EXISTS(SELECT 1 FROM chatgpt_import_records WHERE ${eligible}) THEN 'true' ELSE 'drawing_conflict' END)`).bind(owner,input.activityId,input.expectedRevision,owner,input.activityId),
+    db.prepare(`SELECT json(CASE WHEN COALESCE((SELECT MAX(revision) FROM practice_drawing_additions WHERE owner_id=? AND activity_id=?),0)=? AND EXISTS(SELECT 1 FROM ${completedPracticeTargets} WHERE ${eligible}) THEN 'true' ELSE 'drawing_conflict' END)`).bind(owner,input.activityId,input.expectedRevision,owner,input.activityId),
     db.prepare("INSERT INTO practice_drawing_additions(owner_id,activity_id,revision,operation_id,request_fingerprint,payload,created_at) VALUES(?,?,?,?,?,?,?)").bind(owner,input.activityId,revision,input.operationId,fingerprint,canonicalJson(drawing),now),
   ]);}catch{const saved=await replay();if(saved)return saved;throw new Error("Drawing was not confirmed. Read its latest revision and retry unchanged after uncertainty.");}
   await readDrawingFile(db,bucket,owner,input.activityId,revision);

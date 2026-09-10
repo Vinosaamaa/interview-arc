@@ -1,6 +1,6 @@
 # Practice with connected ChatGPT text and Live
 
-Guide version: **4**. Exchange version: **1**. Checked: **2026-09-10**.
+Guide version: **5**. Exchange version: **1**. Checked: **2026-09-10**.
 
 Connect Interview Arc once in ChatGPT Developer mode using the deployed
 `/chatgpt/mcp` endpoint and OAuth. Cloudflare Access supplies the usual Arc
@@ -36,7 +36,7 @@ missing tools. Never present a generated image as an interactive MCP canvas.
 
 ### Prepare from real sources
 
-- Confirm guide version 4, the selected specialty, exact question ID, current
+- Confirm guide version 5, the selected specialty, exact question ID, current
   progress and observation time. Unknown is not “never attempted.”
 - Use `search` and `fetch`; follow search paging with its exact source
   revision. Refresh after saving. Never claim a partial page is the full bank.
@@ -96,15 +96,15 @@ missing tools. Never present a generated image as an interactive MCP canvas.
   not automatically an Arc checkpoint; report
   those as separate save locations and do not claim the website canvas synced.
 - For a request to publish a system-design session, save the transcript and
-  review first, then call `save_practice_drawing` with its completed imported
-  activity ID and the supplied snapshot URL. Verify both receipts before
+  review first, then call `save_practice_drawing` with its completed native or
+  imported activity ID and the supplied snapshot URL. Verify both receipts before
   reporting full publication. If the drawing fails, report the partial save
   and retry the same drawing operation; do not duplicate the transcript.
 - For a missing drawing URL, ask for **Open in Excalidraw** or **Export to Link**
   and the full opened URL. Never invent a widget export or assume current edits
   were exported. Mark AI-created diagrams as `assistant_reference`. Arc stores
   the editable original, including embedded image data, and a reopen link;
-  this import flow does not generate an SVG/PNG preview. Existing website-native
+  this attachment flow does not generate an SVG/PNG preview. Existing website-native
   System Design checkpoints and asset sets retain their separate workflow.
 - For LeetCode reads, prefer Arc's hosted `get_leetcode_problem`,
   `get_leetcode_recent_submissions`, `get_leetcode_submission` and
@@ -176,7 +176,7 @@ missing tools. Never present a generated image as an interactive MCP canvas.
   official editorial's canonical URL, access time, content SHA256, approach
   titles, and an original attributed explanation. Never invent an access
   receipt or treat community solutions as the official editorial. The addition
-  is independently revisioned and visible on the imported practice record;
+  is independently revisioned and visible on the native or imported Practice Record;
   it does not rewrite source turns, timing, result, or the pinned original
   practice revision. No automatic reference generation or Solution Profile
   promotion occurs. Both Codex and connected text can add this research later.
@@ -188,6 +188,8 @@ When the user explicitly chooses backend-timed text practice, reuse
 activity/session timer controls and explicit result controls. Read current
 revisions and reuse mutation IDs on retries. These are measured server
 boundaries only for commands the API actually receives.
+Timer, result and interaction-mode revisions are independent counters; use the
+revision for the operation being performed, not the last revision seen.
 
 Save exact exchanges and code attempts with their supplied evidence. Generated
 reference answers belong to Solution, not to the user's code attempt. Every
@@ -199,6 +201,30 @@ the same activity with `save_specialist_finalization` and verify
 `get_specialist_write_status` reports saved. Its existing strict Practice
 Record/Solution Profile contract still applies; queued is Finalization pending.
 Missing evidence must not be invented to satisfy a required field.
+
+For coding/design with no available reusable profile, use
+`solutionProfileAction: "defer"`, provide `solutionProfileDecision.reason`, and
+omit `solutionProfile`. This publishes the completed attempt with an explicit
+pending reference. It preserves every transcript, review, outcome and timer
+requirement. Reuse/revise an existing profile; never defer to remove one. Add
+official editorial research or an exported drawing afterward using the same
+activity ID. These additions do not rewrite the completion revision or claim
+that a complete Solution Profile exists.
+
+For behavioral finalization, prepare the fields together before submitting:
+- Universal answer → omit target-review metadata; target-tailored answers need
+  the exact target binding.
+- Copy the visible review bullets verbatim into review and analysis arrays.
+- Final-answer text must appear verbatim in its referenced specialist turn.
+  Save that actual response before naming its turn ID.
+- Snapshot evidence gaps and contradictions must exactly match the claim audit.
+  Fictional examples never become accepted employment evidence.
+- Include detailed profile sections: Interview Signal; Truthful Situation;
+  Truthful Task; Truthful Actions and Ownership; Verified Result and Gaps;
+  Learning; Likely Follow-ups and Evidence Gaps; Reference Answer Patterns.
+  Also provide the interview-ready preferred answer with evidence or explicit
+  gaps in `behavioralAnswer`, and record actual consulted sources in references.
+  Include the required Q&A disposition and exact saved-turn provenance.
 
 Do not carry a running backend timer into an unobservable Voice pause and
 claim precise active time. Use selection-only preparation for ordinary Live

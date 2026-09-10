@@ -7,6 +7,8 @@ import { readD1RowsInBatches } from "./d1-read-batching";
 import {
   activityFinalizations,
   activitySolutionLinks,
+  problemSolutionProfiles,
+  contentBank,
   behavioralFinalAnswerSnapshots,
   extraActivities,
   leetcodeCodeAttempts,
@@ -77,7 +79,8 @@ export type PracticeRecordPayload = {
   };
   review: { didWell: string[]; improve: string[]; nextDrill: string | null };
   references: Array<{ title: string; url: string; accessedAt: string }>;
-  solutionLink: { questionId: string; profileRevision: number };
+  solutionLink: { questionId: string; profileRevision: number } | null;
+  referencePending?: { reason: string };
   assetLinks: Array<{ assetId: string; revision: number; role: string }>;
   finalizationOperationId: string;
   createdAt: string;
@@ -98,6 +101,8 @@ type FinalizationRecordInput = {
   review: { didWell: string[]; improve: string[] };
   references: Array<{ title: string; url: string; accessedAt: string }>;
   practiceRecord?: PracticeRecordSemanticInput;
+  solutionProfileAction?: "create_or_revise" | "reuse_current" | "defer";
+  solutionProfileDecision?: { reason: string };
 };
 
 function timingSource(value: unknown): "website" | "manual" | "unknown" {
@@ -151,7 +156,7 @@ function pointerMatchesPayload(
     && pointer.completedAt === Date.parse(payload.completedAt)
     && pointer.practiceDate === payload.practiceDate
     && pointer.outcome === payload.outcome
-    && pointer.solutionRevision === payload.solutionLink.profileRevision
+    && pointer.solutionRevision === (payload.solutionLink?.profileRevision ?? null)
     && pointer.finalizationOperationId === payload.finalizationOperationId;
 }
 
@@ -423,7 +428,11 @@ export async function persistFinalizedPracticeRecord(input: {
   if (!activity) throw new Error("A complete Practice Record needs authoritative owner-scoped activity metadata.");
   if (!timer?.completed || timer.completedAt === null) throw new Error("A complete Practice Record needs a finished activity timer.");
   if (!outcome) throw new Error("A complete Practice Record needs an explicit activity outcome.");
-  if (!solutionLink || solutionLink.questionId !== input.questionId || solutionLink.specialty !== input.specialty) {
+  const deferred = input.finalization.solutionProfileAction === "defer";
+  if (deferred && (input.specialty === "behavioral" || solutionLink || !input.finalization.solutionProfileDecision?.reason.trim())) {
+    throw new Error("Deferred coding/design references need an explicit reason and cannot remove an existing Solution Profile link.");
+  }
+  if (!deferred && (!solutionLink || solutionLink.questionId !== input.questionId || solutionLink.specialty !== input.specialty)) {
     throw new Error("A complete Practice Record needs the exact completion-time Solution Profile link.");
   }
   if (!finalization || finalization.status !== "draft") {
@@ -497,10 +506,11 @@ export async function persistFinalizedPracticeRecord(input: {
       nextDrill: semanticRecord.nextDrill ?? null,
     },
     references: input.finalization.references,
-    solutionLink: {
+    solutionLink: solutionLink ? {
       questionId: solutionLink.questionId,
       profileRevision: solutionLink.solutionRevision,
-    },
+    } : null,
+    ...(deferred ? { referencePending: { reason: input.finalization.solutionProfileDecision!.reason } } : {}),
     assetLinks: preparedAssets.map((asset) => ({
       assetId: asset.assetId,
       revision: asset.revision,
@@ -541,11 +551,22 @@ export async function persistFinalizedPracticeRecord(input: {
           AND ${practiceAssetSetOperations.status} = 'staged'
       )`
     : sql`1 = 1`;
+  const deferredReferenceCondition = deferred ? sql`
+    NOT EXISTS (SELECT 1 FROM ${activitySolutionLinks}
+      WHERE ${activitySolutionLinks.ownerId}=${input.ownerId} AND ${activitySolutionLinks.activityId}=${input.activityId})
+    AND NOT EXISTS (SELECT 1 FROM ${problemSolutionProfiles}
+      WHERE ${problemSolutionProfiles.ownerId}=${input.ownerId} AND ${problemSolutionProfiles.specialty}=${input.specialty}
+        AND ${problemSolutionProfiles.questionId}=${input.questionId})
+    AND NOT EXISTS (SELECT 1 FROM ${contentBank}
+      WHERE ${contentBank.category}=${input.specialty === "system_design" ? "systemDesign" : input.specialty}
+        AND ${contentBank.id}=${input.questionId} AND json_extract(${contentBank.payload}, '$.solutionProfile') IS NOT NULL)
+  ` : sql`1 = 1`;
   try {
     await db.batch([
       d1TransactionalInvariantGuard(db, currentCondition),
       d1TransactionalInvariantGuard(db, finalizationCondition),
       d1TransactionalInvariantGuard(db, assetSetCondition),
+      d1TransactionalInvariantGuard(db, deferredReferenceCondition),
       db.insert(practiceRecordRevisions).values({
         ownerId: input.ownerId,
         activityId: input.activityId,
@@ -566,7 +587,7 @@ export async function persistFinalizedPracticeRecord(input: {
         completedAt,
         practiceDate: payload.practiceDate,
         outcome: outcome.outcome,
-        solutionRevision: solutionLink.solutionRevision,
+        solutionRevision: solutionLink?.solutionRevision ?? null,
         recordFingerprint: fingerprint,
         finalizationOperationId: input.operationId,
         updatedAt: input.nowMs,
@@ -580,7 +601,7 @@ export async function persistFinalizedPracticeRecord(input: {
           completedAt,
           practiceDate: payload.practiceDate,
           outcome: outcome.outcome,
-          solutionRevision: solutionLink.solutionRevision,
+          solutionRevision: solutionLink?.solutionRevision ?? null,
           recordFingerprint: fingerprint,
           finalizationOperationId: input.operationId,
           updatedAt: input.nowMs,

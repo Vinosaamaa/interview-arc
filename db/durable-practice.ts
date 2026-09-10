@@ -1,5 +1,8 @@
 import { and, asc, desc, eq, exists, gt, inArray, isNotNull, isNull, lt, notExists, or, sql } from "drizzle-orm";
 import { getDb } from "./index";
+import { env } from "cloudflare:workers";
+import { readPracticeDrawing } from "./practice-drawing";
+import { readPracticeEditorial } from "./practice-editorial";
 import type { NativeTranscriptSource, TypedTranscriptSource } from "./transcript-source";
 import { solutionProfileMissingRequirements } from "../app/solution-profile-policy";
 import {
@@ -225,7 +228,7 @@ export type SpecialistFinalization = {
   edgeCases?: string[];
   references: Array<{ title: string; url: string; accessedAt: string }>;
   questionMetadata?: LeetCodeQuestionMetadata;
-  solutionProfileAction?: "create_or_revise" | "reuse_current";
+  solutionProfileAction?: "create_or_revise" | "reuse_current" | "defer";
   solutionProfileDecision?: {
     reason: string;
     changedSections: string[];
@@ -4380,7 +4383,19 @@ export async function saveSpecialistFinalization(
       eq(problemSolutionProfiles.questionId, questionId),
     ));
     currentProfile = rows[0];
-    if (profileAction === "reuse_current") {
+    if (profileAction === "defer") {
+      if (specialty === "behavioral" || payload.solutionProfile || !payload.solutionProfileDecision?.reason.trim()) {
+        throw new Error("Deferred references require a coding/design activity, an explicit reason, and no claimed Solution Profile.");
+      }
+      if (currentProfile) throw new Error("A Solution Profile already exists; reuse or revise it instead of deferring it.");
+      const canonical = await db.select({ payload: contentBank.payload }).from(contentBank).where(and(
+        eq(contentBank.category, specialty === "system_design" ? "systemDesign" : specialty),
+        eq(contentBank.id, questionId),
+      ));
+      if ((canonical[0]?.payload as { solutionProfile?: unknown } | undefined)?.solutionProfile) {
+        throw new Error("A canonical Solution Profile already exists; reuse or revise it instead of deferring it.");
+      }
+    } else if (profileAction === "reuse_current") {
       if (currentProfile) validateSolutionProfile(
         specialty,
         currentProfile.payload as NonNullable<SpecialistFinalization["solutionProfile"]>,
@@ -5604,6 +5619,10 @@ export async function readSpecialistTasks(ownerId: string) {
 
 export async function readActivityPracticeRecord(ownerId: string, activityId: string) {
   const db = getDb();
+  const [drawingAddition, editorialAddition] = await Promise.all([
+    readPracticeDrawing(env.DB, ownerId, activityId),
+    readPracticeEditorial(env.DB, ownerId, activityId),
+  ]);
   const [turns, notes, finalizations, classificationRows, modeTransitions, modeTurnOverrides, finalAnswerRows, resumeContextRows, reviews, clips, deliveryAnalyses, codeAttempts, typedExchangeDeletions, solutionLinks, projectLinks, practiceRecord] = await Promise.all([
     db
       .select()
@@ -5801,6 +5820,8 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     codeAttempts,
     practiceRecord,
     practiceAssets,
+    drawingAddition,
+    editorialAddition,
     projectDeepDiveLink: projectLinks[0] ?? null,
   };
 }
