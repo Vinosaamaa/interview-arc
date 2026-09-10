@@ -85,5 +85,55 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     const codeRecord = await client.callTool({ name: "get_activity_practice_record", arguments: { activityId: "synthetic-code-activity" } });
     assert.equal(codeRecord.structuredContent.codeAttempts[0].code, code);
     assert.deepEqual(codeRecord.structuredContent.codeAttempts[0].review, review);
+    const evidence = await client.callTool({ name: "upsert_behavioral_evidence_item", arguments: {
+      operationId: "synthetic-chatgpt-fact", evidence: {
+        evidenceId: "synthetic-chatgpt-fact", projectKey: "synthetic-project", origin: "user_statement",
+        statement: "The owner reports implementing retry handling in a fictional project.", sourceRevision: "synthetic-turn-1",
+        evidenceGrade: "E1", attributionGrade: "A1", claimStrength: "project_fact", candidateState: "pending",
+        safeProvenance: [{ kind: "conversation", reference: "synthetic-turn-1" }], supports: [], limitations: ["User reported, not independently verified."], tags: [],
+      },
+      questionLink: { questionId: "synthetic-behavioral-question", relevance: "supporting" },
+    } });
+    assert.equal(evidence.isError, undefined, JSON.stringify(evidence));
+    for (let index = 0; index < 100; index++) {
+      const status = await client.callTool({ name: "get_specialist_write_status", arguments: { jobIds: ["synthetic-chatgpt-fact"] } });
+      receipt = status.structuredContent.jobs[0];
+      if (["saved", "failed"].includes(receipt?.status)) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert.equal(receipt?.status, "saved", JSON.stringify(receipt));
+    const accepted = await client.callTool({ name: "review_behavioral_evidence_candidates", arguments: {
+      operationId: "synthetic-chatgpt-accept", authorization: "explicit_owner_review",
+      decisions: [{ evidenceId: "synthetic-chatgpt-fact", expectedRevision: 1, decision: "accept", reason: "Synthetic owner authorization to retain this reported fact." }],
+    } });
+    assert.equal(accepted.isError, undefined, JSON.stringify(accepted));
+    assert.equal(accepted.structuredContent.decisions[0].state, "accepted");
+    const facts = await client.callTool({ name: "query_behavioral_evidence_candidates", arguments: { projectKey: "synthetic-project", state: "accepted" } });
+    assert.equal(facts.isError, undefined, JSON.stringify(facts));
+    assert.equal(facts.structuredContent.candidates[0].evidenceId, "synthetic-chatgpt-fact");
+    const question = await client.callTool({ name: "create_practice_question", arguments: {
+      operationId: "synthetic-editorial-question", specialty: "leetcode", title: "Synthetic coding example", prompt: "Fictional maximum exercise.", url: "https://leetcode.com/problems/two-sum/",
+    } });
+    const packet = JSON.parse(await readFile(new URL("../docs/contracts/chatgpt-backfill-synthetic.example.json", import.meta.url), "utf8"));
+    const coding = packet.sessions[0].attempts.find((a) => a.question.specialty === "leetcode");
+    packet.sessions[0].attempts = [coding];
+    coding.question.questionId = question.structuredContent.questionId;
+    coding.question.url = "https://leetcode.com/problems/two-sum/";
+    coding.practiceDate = "2026-09-08"; coding.dateBasis = "user_reported";
+    const preview = await client.callTool({ name: "preview_practice_backfill", arguments: { packet } });
+    assert.equal(preview.isError, undefined, JSON.stringify(preview));
+    const imported = await client.callTool({ name: "apply_practice_backfill", arguments: { packet, previewToken: preview.structuredContent.previewToken } });
+    assert.equal(imported.isError, undefined, JSON.stringify(imported));
+    assert.equal(imported.structuredContent.records[0].status, "completed");
+    const addition = { operationId: "synthetic-editorial", activityId: imported.structuredContent.records[0].activityId,
+      questionId: coding.question.questionId, expectedRevision: 0, source: "owner_supplied",
+      editorialUrl: "https://leetcode.com/problems/two-sum/editorial/", accessedAt: "2026-09-10T00:00:00Z",
+      contentSha256: "a".repeat(64), approachTitles: ["Synthetic approach"], explanation: "Fictional test explanation; no real editorial research is claimed by this test." };
+    const editorial = await client.callTool({ name: "backfill_practice_editorial", arguments: addition });
+    assert.equal(editorial.isError, undefined, JSON.stringify(editorial));
+    assert.equal(editorial.structuredContent.editorial.revision, 1);
+    assert.equal((await client.callTool({ name: "backfill_practice_editorial", arguments: addition })).structuredContent.duplicate, true);
+    const readback = await client.callTool({ name: "get_practice_editorial", arguments: { activityId: addition.activityId } });
+    assert.equal(readback.structuredContent.editorial.explanation, addition.explanation);
   } finally { if (client) await client.close(); await stopMcpWorker(worker?.child); await rm(persistence, { recursive: true, force: true }); await release(); }
 });
