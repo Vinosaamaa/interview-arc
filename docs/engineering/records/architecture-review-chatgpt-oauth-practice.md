@@ -42,8 +42,11 @@ and an explicit practice-tool allowlist. The established provider owns discovery
 client registration, PKCE, refresh and revocation rather than a new Arc
 authorization server. Existing personal-token clients retain their endpoint.
 The separate path-scoped provider application was configured and its public
-resource/authorization discovery verified during implementation. Account linking
-and authenticated production calls remain separate release checks.
+resource/authorization discovery verified during implementation: OAuth 401 leads
+to resource metadata and issuer metadata, both 200, advertising S256 PKCE and
+dynamic client registration. ChatGPT connector creation succeeded after fresh
+discovery and entered owner sign-in; completion awaits Mac unlock. Account
+linking and authenticated production calls remain separate release checks.
 
 ## Boundary and alternatives
 

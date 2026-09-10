@@ -1,6 +1,7 @@
 # Connected ChatGPT practice: text and Live boundaries
 
-Assessment: **2026-09-09**. Real ChatGPT connection acceptance: **pending**.
+Assessment: **2026-09-09**. Provider setup and ChatGPT connector creation:
+**verified**. Owner account linking and practice tool acceptance: **pending**.
 
 The intended daily flow is text preparation from the connected private bank,
 Live conversation in the same chat where supported, then direct text save.
@@ -20,8 +21,11 @@ identity policy, approved ChatGPT redirect URIs and a dedicated audience.
 The MCP Worker needs `CHATGPT_ACCESS_TEAM_DOMAIN` and `CHATGPT_ACCESS_AUD`.
 Without those configured values or a valid assertion, the endpoint returns 401.
 Provider discovery is served by Access before the request reaches the Worker.
-Path-scoped discovery must be tested after configuration; if it conflicts with
-the existing bridge, use a separate hostname/application for this endpoint.
+The isolated path-scoped application has been configured with the existing
+owner identity policy and dedicated Worker configuration. Its OAuth 401
+challenge leads to resource metadata (200), then authorization-server metadata
+(200) advertising S256 PKCE and dynamic client registration. The legacy route
+retains its previous authentication response.
 
 This deliberately avoids implementing an authorization server or issuing
 another manually copied API key. OAuth compatibility follows the
@@ -36,15 +40,18 @@ and [Cloudflare Managed OAuth](https://developers.cloudflare.com/cloudflare-one/
 | Add a question | Insert-only private question with durable operation receipt; canonical matches reused | No implicit activity, timer, result or prompt overwrite. |
 | Text practice timers/results | Existing guarded planning, timer, mode and result handlers | Requires actual text tool calls and current revisions. |
 | Exact exchanges and code review | Existing exchange/code-attempt handlers and saved-status readback | No code execution or external judge submission is implied. |
-| Reusable answers and solution profiles | Existing provisional/finalization contracts | Original coaching is not an official editorial; required source and revision checks remain. |
-| Behavioral materials | Existing preflight, accepted evidence/stories/project references and activity-bound resume context | Missing facts remain gaps; no career administration or filesystem access. |
+| Reusable answers and solution profiles | Existing provisional/finalization contracts | Text activity finalization can create a current Solution. Historical backfill can prepare a first provisional reference but cannot promote/revise current Solution; original coaching is not an official editorial. |
+| Behavioral materials | Existing preflight, accepted evidence/stories/project references, current resume library/revisions and activity-bound resume context | Missing facts remain gaps; no career administration or filesystem access. |
 | Live historical save | Strict preview/apply importer with immutable receipt and source fidelity | Exact available transcript only; incomplete evidence stays pending. |
 | Excalidraw | Read an already saved scene in revision-checked fragments | No canvas control or drawing upload; existing write roles are user-original assets, not generated references. |
 | Live tool invocation | Not established | A working text connector does not prove tools are callable in Voice. |
 
 The ChatGPT Developer-mode form was inspected and OAuth discovery was missing
-before implementation. Provider setup and real account acceptance are separate
-from the local cryptographic, SQL and MCP transport tests. Model, plan and
+before implementation. After provider setup and refreshed discovery, ChatGPT
+connector creation succeeded and entered the owner sign-in flow. Account
+linking is awaiting Mac unlock; no authenticated bank call has been observed.
+Those observations are separate from local cryptographic, SQL and MCP transport
+tests. Model, plan and
 surface restrictions still apply. The current consumer Voice documentation
 excludes connected apps/plugins; it does not establish this custom connector as
 a Live tool route. The same-chat transition must also succeed on the account.
