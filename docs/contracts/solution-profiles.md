@@ -65,6 +65,51 @@ it, complete algorithm and transition, invariant/proof, time/space complexity,
 edge cases, preferred comparison, and runnable Java code. Add independently
 written pseudocode when it materially improves understanding. Cite consulted
 Editorials, copy no official prose/code, and report unavailable access honestly.
+
+### Executable authoring format
+
+When constructing `sections`, use these exact titles. Minimum word counts are
+structural validation floors, not writing targets; supply concrete reasoning
+instead of filler. The shared validator is `app/solution-profile-policy.ts`.
+
+| Section title | Required content |
+| --- | --- |
+| Problem | At least 45 words covering the complete problem contract. |
+| Pattern Recognition and Constraints | At least 30 words explaining why the constraints suggest the pattern. |
+| Best Approach | At least 60 words, with an actual `#### Algorithm` heading. |
+| Reference Implementations | At least 30 words and complete fenced Java and Python implementations. |
+| Correctness Reasoning | At least 45 words explicitly identifying the invariant and proof. |
+| Time and Space Complexity | At least 20 words; state `Time O(...)` and `Space O(...)` explicitly. |
+| Edge Cases | At least 24 words and three concrete Markdown list items. |
+| Editorial-first Approach Catalog | At least 100 words, with every verified approach in recorded order. |
+| Common Mistakes and Recall Cues | At least 30 words grounded in failure modes. |
+| Interview Walkthrough | At least 35 words forming an explanation usable without the transcript. |
+
+Within each `### Editorial approach: <exact title>` or permitted generated
+alternative, use these actual Markdown headings; bold labels are insufficient:
+
+```markdown
+#### When and why to use
+#### Algorithm
+#### Invariant and correctness
+#### Complexity
+#### Edge cases
+#### Tradeoffs versus preferred
+#### Reference implementation
+```
+
+The first six subsection prose floors are respectively 18, 28, 28, 14, 12,
+and 20 words, excluding code. Each approach needs at least 100 prose words
+overall, explicit `Time O(...)` and `Space O(...)`, and complete fenced Java
+code under Reference implementation. Reuse the exact preferred `Algorithm`
+subsection body in its matching Editorial entry so it counts as one algorithm.
+Preserve the complete content in the submitted payload, not only in chat text.
+
+On a rejected publication, read the per-item error, correct the named content
+or formatting gaps, and publish only that failed item with fresh guards and a
+new batch ID. An identical retry retrieves the same immutable rejection; it
+does not replace the rejected payload. Keep successful sibling receipts.
+
 Every LeetCode revision carries a structured `editorialResearch` receipt from
 the checked-in Playwright controller or authenticated hosted LeetCode MCP
 reader (`leetcode_mcp`): canonical URL, access time, availability,
