@@ -92,6 +92,7 @@ export const chatgptExportSchema = z.strictObject({
   unique(v.sessions.map((s) => s.sessionKey), "session identity");
   const attempts = v.sessions.flatMap((s) => s.attempts);
   if (attempts.length > 100) fail("Import at most 100 attempts per packet");
+  if (attempts.length * 8 + v.sources.length * 4 + v.sessions.length * 3 > 900) fail("Split this export into fewer sessions or source chats per packet.");
   unique(attempts.map((a) => a.attemptKey), "attempt identity");
   const turns = new Map(v.sources.flatMap((s) => s.turns.map((t) => [t.turnKey, { ...t, sourceChatKey: s.sourceChatKey }] as const)));
   unique(v.sources.flatMap((s) => s.turns.map((t) => t.turnKey)), "turn identity");

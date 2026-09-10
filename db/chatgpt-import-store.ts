@@ -69,7 +69,14 @@ export async function prepareChatgptImport(db: Database, owner: string, input: C
       WHERE s.owner_id = ? AND s.source_key != ? AND json_extract(t.value, '$.turnKey') IN (SELECT json_extract(value, '$.turnKey') FROM json_each(?)) LIMIT 1`)
       .bind(owner, source.sourceChatKey, JSON.stringify(source.turns)).first();
     if (foreign) throw new ChatgptImportError("A turn identity already belongs to another source chat.");
-    const payload = canonicalJson([...merged.values()].sort((a, b) => a.sequence - b.sequence));
+    const ordered = [...merged.values()].sort((a, b) => a.sequence - b.sequence);
+    let lastTimestamp: number | null = null;
+    for (const turn of ordered) if (turn.occurredAt !== null) {
+      const timestamp = Date.parse(turn.occurredAt);
+      if (lastTimestamp !== null && timestamp < lastTimestamp) throw new ChatgptImportError("New source timestamps contradict the previously saved conversation order.");
+      lastTimestamp = timestamp;
+    }
+    const payload = canonicalJson(ordered);
     if (new TextEncoder().encode(payload).length > 1_500_000) throw new ChatgptImportError("This source is too large. Start a new source capture key for the next conversation range.", 413);
     sourceUpdates.push({ sourceKey: source.sourceChatKey, oldHash: old?.fingerprint ?? null, hash: await importFingerprint(JSON.parse(payload)), payload });
   }
