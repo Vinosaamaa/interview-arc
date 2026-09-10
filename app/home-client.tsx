@@ -61,6 +61,7 @@ import { useLiveState, useReadOnlyLiveState } from "./live-sync";
 import { emptyJournal } from "./current-day";
 import { ArrivalRitual, AtmosphereField, type AtmosphereMode } from "./arrival-ritual";
 import CodeBlock from "./code-block";
+import ChatgptPractice from "./chatgpt-practice";
 import { useMobileReaderViewport } from "./use-mobile-reader-viewport";
 import ReaderRenderDiagnosticsPanel from "./reader-render-diagnostics-panel";
 import {
@@ -1111,6 +1112,12 @@ function MarkdownBody({ source }: { source: string }) {
     remarkPlugins={[remarkGfm]}
     components={MARKDOWN_COMPONENTS}
   >{source}</Markdown></div>;
+}
+
+// Imported chat text is evidence, not permission to fetch remote images.
+const IMPORTED_MARKDOWN_COMPONENTS = { ...MARKDOWN_COMPONENTS, img: ({ alt }: { alt?: string }) => <span>{alt ? `Image reference: ${alt}` : "Image reference (not fetched)"}</span> };
+function ImportedMarkdownBody({ source }: { source: string }) {
+  return <div className="markdown-body"><Markdown remarkPlugins={[remarkGfm]} components={IMPORTED_MARKDOWN_COMPONENTS}>{source}</Markdown></div>;
 }
 
 function formatAudioDuration(seconds: number | null) {
@@ -5795,6 +5802,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
           { value: "Pacific", label: "record" },
         ]} />
         {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That practice record is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
+        <ChatgptPractice MarkdownBody={ImportedMarkdownBody} />
         <div className={`past-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${selectedEntry ? "reader-workspace" : ""} ${nestedReaderFocus ? "nested-reader-focus" : ""} ${readerClosing ? "reader-closing" : ""}`}>
           <div
             className="past-master-pane"

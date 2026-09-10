@@ -1,0 +1,282 @@
+{
+  "schemaVersion": 1,
+  "kind": "practice_export",
+  "packetId": "synthetic-packet-1",
+  "exportedAt": null,
+  "timeZone": "America/Los_Angeles",
+  "snapshots": [
+    {
+      "snapshotId": "synthetic-catalog-v1",
+      "sourceDescription": "Entirely fictional selected catalog for contract examples.",
+      "sourceRevision": "synthetic-revision-1",
+      "dataAsOf": null
+    }
+  ],
+  "sources": [
+    {
+      "sourceChatKey": "synthetic-chat",
+      "kind": "mixed_chat",
+      "providedRange": "Fictional practice turns 1–10: first question in Voice transcript, second in typed text.",
+      "coverage": "complete_provided_source",
+      "gaps": [
+        "Voice text is an illustrative transcript, not an audio recording."
+      ],
+      "turns": [
+        {
+          "turnKey": "synthetic-chat:t1",
+          "sequence": 1,
+          "speaker": "user",
+          "text": "Start. Let's practice the synthetic queue question.",
+          "occurredAt": null,
+          "timestampBasis": null
+        },
+        {
+          "turnKey": "synthetic-chat:t2",
+          "sequence": 2,
+          "speaker": "assistant",
+          "text": "How will your queue recover a job after a worker crashes?",
+          "occurredAt": null,
+          "timestampBasis": null
+        },
+        {
+          "turnKey": "synthetic-chat:t3",
+          "sequence": 3,
+          "speaker": "user",
+          "text": "I would lease the job to a worker and make it eligible again after lease expiry.",
+          "occurredAt": null,
+          "timestampBasis": null
+        },
+        {
+          "turnKey": "synthetic-chat:t4",
+          "sequence": 4,
+          "speaker": "user",
+          "text": "Pause.",
+          "occurredAt": null,
+          "timestampBasis": null
+        },
+        {
+          "turnKey": "synthetic-chat:t5",
+          "sequence": 5,
+          "speaker": "user",
+          "text": "Resume.",
+          "occurredAt": null,
+          "timestampBasis": null
+        },
+        {
+          "turnKey": "synthetic-chat:t6",
+          "sequence": 6,
+          "speaker": "user",
+          "text": "Finish question. That was about 10 active minutes.",
+          "occurredAt": null,
+          "timestampBasis": null
+        },
+        {
+          "turnKey": "synthetic-chat:t7",
+          "sequence": 7,
+          "speaker": "user",
+          "text": "Next question: the synthetic maximum exercise. I'll use Python.",
+          "occurredAt": null,
+          "timestampBasis": null
+        },
+        {
+          "turnKey": "synthetic-chat:t8",
+          "sequence": 8,
+          "speaker": "assistant",
+          "text": "Return the largest value in a nonempty integer list.",
+          "occurredAt": null,
+          "timestampBasis": null
+        },
+        {
+          "turnKey": "synthetic-chat:t9",
+          "sequence": 9,
+          "speaker": "user",
+          "text": "def largest(values):\n    best = values[0]\n    for value in values[1:]:\n        best = max(best, value)\n    return best\n\nI solved it without help; I did not submit to an online judge.",
+          "occurredAt": null,
+          "timestampBasis": null
+        },
+        {
+          "turnKey": "synthetic-chat:t10",
+          "sequence": 10,
+          "speaker": "user",
+          "text": "Finish. About 30 active minutes for the whole session. I don't know the second question's time.",
+          "occurredAt": null,
+          "timestampBasis": null
+        }
+      ]
+    }
+  ],
+  "sessions": [
+    {
+      "sessionKey": "synthetic-session-1",
+      "timing": {
+        "state": "finished",
+        "activeMinutes": 30,
+        "basis": "user_estimate",
+        "evidence": "User estimate in synthetic-chat:t10; exclude paused time.",
+        "events": [
+          {
+            "command": "start",
+            "at": null,
+            "timestampBasis": null,
+            "evidence": null
+          },
+          {
+            "command": "pause",
+            "at": null,
+            "timestampBasis": null,
+            "evidence": null
+          },
+          {
+            "command": "resume",
+            "at": null,
+            "timestampBasis": null,
+            "evidence": null
+          },
+          {
+            "command": "pause",
+            "at": null,
+            "timestampBasis": null,
+            "evidence": null
+          },
+          {
+            "command": "resume",
+            "at": null,
+            "timestampBasis": null,
+            "evidence": null
+          },
+          {
+            "command": "finish",
+            "at": null,
+            "timestampBasis": null,
+            "evidence": null
+          }
+        ]
+      },
+      "attempts": [
+        {
+          "attemptKey": "synthetic-attempt-1",
+          "snapshotId": "synthetic-catalog-v1",
+          "question": {
+            "specialty": "system_design",
+            "questionId": "synthetic-queue",
+            "title": "Synthetic queue design",
+            "url": null,
+            "prompt": "Design a small job queue and discuss retry behavior."
+          },
+          "practiceDate": null,
+          "dateBasis": null,
+          "mode": "interviewer",
+          "kind": "attempt",
+          "userAttempted": true,
+          "outcome": null,
+          "outcomeEvidenceTurnKeys": [],
+          "sourceChatKeys": [
+            "synthetic-chat"
+          ],
+          "turnKeys": [
+            "synthetic-chat:t1",
+            "synthetic-chat:t2",
+            "synthetic-chat:t3",
+            "synthetic-chat:t4",
+            "synthetic-chat:t5",
+            "synthetic-chat:t6"
+          ],
+          "timing": {
+            "state": "finished",
+            "activeMinutes": 10,
+            "basis": "user_estimate",
+            "evidence": "User estimate in synthetic-chat:t6.",
+            "events": [
+              {
+                "command": "start",
+                "at": null,
+                "timestampBasis": null,
+                "evidence": null
+              },
+              {
+                "command": "pause",
+                "at": null,
+                "timestampBasis": null,
+                "evidence": null
+              },
+              {
+                "command": "resume",
+                "at": null,
+                "timestampBasis": null,
+                "evidence": null
+              },
+              {
+                "command": "finish",
+                "at": null,
+                "timestampBasis": null,
+                "evidence": null
+              }
+            ]
+          },
+          "summary": "User proposed a lease and expiry retry mechanism.",
+          "review": "Original coaching: ask next about duplicate processing and idempotent handlers; those topics were not answered in the supplied attempt.",
+          "gaps": [
+            "No drawing or complete design was supplied."
+          ]
+        },
+        {
+          "attemptKey": "synthetic-attempt-2",
+          "snapshotId": "synthetic-catalog-v1",
+          "question": {
+            "specialty": "leetcode",
+            "questionId": "synthetic-maximum",
+            "title": "Synthetic maximum exercise",
+            "url": null,
+            "prompt": "Return the largest value in a nonempty integer list."
+          },
+          "practiceDate": null,
+          "dateBasis": null,
+          "mode": "interviewer",
+          "kind": "attempt",
+          "userAttempted": true,
+          "outcome": "solved",
+          "outcomeEvidenceTurnKeys": [
+            "synthetic-chat:t9"
+          ],
+          "sourceChatKeys": [
+            "synthetic-chat"
+          ],
+          "turnKeys": [
+            "synthetic-chat:t7",
+            "synthetic-chat:t8",
+            "synthetic-chat:t9",
+            "synthetic-chat:t10"
+          ],
+          "timing": {
+            "state": "finished",
+            "activeMinutes": null,
+            "basis": "unknown",
+            "evidence": null,
+            "events": [
+              {
+                "command": "start",
+                "at": null,
+                "timestampBasis": null,
+                "evidence": null
+              },
+              {
+                "command": "finish",
+                "at": null,
+                "timestampBasis": null,
+                "evidence": null
+              }
+            ]
+          },
+          "summary": "User supplied Python code and reported solving independently.",
+          "review": "Success is user-reported; no judge execution evidence was supplied.",
+          "gaps": [
+            "Question duration is unknown; the session total does not establish it."
+          ]
+        }
+      ]
+    }
+  ],
+  "gaps": [
+    "Entirely synthetic example; not a real practice record."
+  ]
+}

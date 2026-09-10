@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "kind": "bank_snapshot",
+  "snapshot": {
+    "snapshotId": "synthetic-catalog-v1",
+    "sourceDescription": "Entirely fictional selected catalog for contract examples.",
+    "sourceRevision": "synthetic-revision-1",
+    "dataAsOf": null
+  },
+  "timeZone": "America/Los_Angeles",
+  "visibility": "public_catalog",
+  "scope": "selected",
+  "questions": [
+    {
+      "specialty": "system_design",
+      "questionId": "synthetic-queue",
+      "title": "Synthetic queue design",
+      "url": null,
+      "prompt": "Design a small job queue and discuss retry behavior.",
+      "topics": [
+        "queues"
+      ],
+      "availability": "active",
+      "progress": null
+    },
+    {
+      "specialty": "leetcode",
+      "questionId": "synthetic-maximum",
+      "title": "Synthetic maximum exercise",
+      "url": null,
+      "prompt": "Return the largest value in a nonempty integer list.",
+      "topics": [
+        "arrays"
+      ],
+      "availability": "active",
+      "progress": null
+    }
+  ]
+}

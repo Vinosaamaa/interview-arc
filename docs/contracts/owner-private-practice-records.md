@@ -171,6 +171,25 @@ without inference.
 
 ## Transition and reconciliation
 
+### Imported historical practice
+
+The [ChatGPT exchange](chatgpt-practice-backfill.md) adds a separate historical
+activity representation for imported practice whose exact clocks or reusable
+Solution Profile may be unavailable. An authenticated owner previews and
+explicitly applies its mechanical writer. Immutable import revisions and
+current pointers live in owner-scoped D1; they are rendered under Imported
+practice in Past after exact readback. They do not fabricate live activities,
+timer intervals, finalization payloads or Solution Profile revisions to satisfy
+the live specialist schema. Pending source evidence remains outside completed
+Past/progress. Same-question/Pacific-day conflicts remain pending.
+
+Historical imports contribute to downloaded bank progress. Their approximate
+or unknown duration stays in the historical reader; it is not added to exact
+live timer/Journey aggregates. The imported packet is private evidence, never
+an automatic public publication or an authorized external fetch instruction.
+
+### Legacy and specialist transition
+
 - The existing Git importer may read only the frozen legacy manifest during
   migration; it must never overwrite a newer owner-private revision.
 - Past, Journey, and Pacific date grouping move to D1 projections before legacy
