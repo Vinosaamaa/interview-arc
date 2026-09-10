@@ -2616,9 +2616,9 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
     : new McpServer({ name: "Interview Arc", version: "1.0.0" });
   registerEditorialTools(server, env.DB, ownerId);
   if (chatgpt) registerChatgptTools(server, env.DB, ownerId, (activityId) => readCurrentPracticeDesignCheckpoint(ownerId, activityId, env.AUDIO));
-  if (chatgpt) registerLeetcodeTools(server, env.AUDIO, ownerId);
-  if (chatgpt) registerCodingTools(server, env.DB, env.AUDIO, ownerId);
-  if (chatgpt) registerDrawingTools(server, env.DB, env.AUDIO, ownerId);
+  registerLeetcodeTools(server, env.AUDIO, ownerId);
+  registerCodingTools(server, env.DB, env.AUDIO, ownerId);
+  registerDrawingTools(server, env.DB, env.AUDIO, ownerId);
 
   server.registerTool(
     "get_practice_interaction_mode",
@@ -5391,6 +5391,7 @@ export default {
       return acknowledgeDeliveryReviewBypass(ownerId, request, decodeURIComponent(deliveryReviewBypass[1]));
     }
     if (url.pathname === "/mcp" || url.pathname.startsWith("/mcp/")) {
+      if (url.searchParams.get("surface") === "excalidraw") return routeExcalidrawProxy(request);
       return createMcpHandler(createServer(ownerId, env, ctx))(request, env, ctx);
     }
     return json(request, { error: "Not found" }, { status: 404 });

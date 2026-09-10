@@ -13,6 +13,7 @@ Load only the contract needed for the current action:
 | Solution Profile | `../../docs/contracts/solution-profiles.md` |
 | Java preparation/testing | `../../docs/contracts/leetcode-java-harness.md` |
 | Browser/editorial/submission | `../../docs/contracts/leetcode-playwright-controller.md` |
+| Hosted MCP or chat coding panel | `../../docs/contracts/hosted-practice-tools.md` |
 | Code Attempt review | `../../docs/contracts/code-attempt-reviews.md` |
 | Reader/template change | `../../docs/contracts/reader-rendering.md` |
 
@@ -67,12 +68,17 @@ On an explicit start, keep the timer stopped until the prepared source's
 tmux-safe `nvim` command has rendered. Preparation while the user is away does
 not start it.
 
+For an explicitly requested app coding panel, readiness means the actual
+editable panel and exact problem are visible instead. Keep the CLI source and
+harness flow otherwise. Hosted MCP is the preferred problem/editorial/submission
+transport when connected; browser fallback does not change practice semantics.
+
 Use this bounded warm startup:
 
 1. Read Today once and reuse one planned/focused activity; never duplicate it.
 2. Resolve `questionId` and load its Solution Profile once.
-3. Run the [controller commands](#test-editorial-and-submit) once, read the
-   exact live Java starter, and prepare/resume the source.
+3. Read the exact live starter with `get_leetcode_problem`, or use the
+   [controller fallback](#test-editorial-and-submit), and prepare/resume the source.
 4. Send the tmux-safe `nvim` command as the first visible handoff.
 5. After it renders, start the timer, reserve the harness, and return the
    prompt/restatement plus Quick/Full commands without waiting for helpers.
@@ -158,7 +164,12 @@ cannot rewrite the working source or become the submitted payload.
 
 ### Mandatory specialist route
 
-The checked-in controller is the only supported browser and submission path.
+Follow `hosted-practice-tools.md` for the preferred hosted MCP transport,
+including exact saved drafts, reviewed revisions, owner authentication,
+explicit submission and uncertain-receipt handling. This exception permits
+the fixed server-owned authenticated tools; agents do not construct arbitrary
+private endpoint requests. The checked-in controller remains the only supported
+browser fallback path.
 Run it from repository root with macOS GUI and loopback authority. For an
 agent-run controller command, request `require_escalated` on the first attempt;
 never run a misleading sandboxed preflight first. Never replace it with browser
@@ -211,7 +222,8 @@ and bounded verdict observation. Keep the dedicated browser open unless the
 user explicitly asks to close it; never target ordinary Chrome.
 
 Editorial review is post-attempt research or an explicit solution/review
-request, never part of submission. Run the one-step `editorial` command from
+request, never part of submission. Prefer `get_leetcode_editorial` and assemble
+all pages under the exact returned hash. In the browser fallback, run the one-step `editorial` command from
 whatever same-problem route currently occupies the one tab. Treat it as
 consulted only when the controller returns `availability: "available"`,
 `contentAvailable: true`, and rendered `researchMaterial`; actually inspect
@@ -223,8 +235,9 @@ complete ordered Editorial approach titles in `editorialResearch`; its catalog
 must match the profile's Editorial panels exactly. Never label an approach
 Editorial when the receipt is unavailable or premium-locked.
 
-Do not bulk-crawl LeetCode, export cookies, inspect account/submission history,
-or call undocumented authenticated/private endpoints.
+Do not bulk-crawl LeetCode, export cookies, inspect unrelated account/submission
+history, or directly call undocumented authenticated/private endpoints outside
+the fixed hosted tools authorized above.
 
 ## Automatic Post-Attempt Review
 

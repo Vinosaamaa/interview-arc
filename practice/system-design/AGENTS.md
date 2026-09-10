@@ -25,6 +25,13 @@ model design.
 
 ## Drawing Preflight
 
+When the user chooses the connected app canvas, follow
+`../../docs/contracts/hosted-practice-tools.md` instead of starting a local
+server. Use `arc_excalidraw` only when its actual tools and editable UI are
+available. A CLI can call scene tools, but retains the local canvas below for
+interactive drawing. Export and save the exact scene separately; do not claim
+automatic synchronization with Arc's website-native checkpoints.
+
 At a new activity, reconnect, or missing/expired/unhealthy lease, use the
 project-installed `excalidraw-skill` and pinned local `excalidraw_live` v2
 runtime on `127.0.0.1:3032`:
@@ -48,7 +55,7 @@ A healthy lease is bound to the exact server, tab, activity, and checkpoint
 revision and expires after five minutes without a successful scene exchange.
 Resume within that lease reuses it without another tab or round trip.
 
-Never use the blocked Chrome extension, Computer Use, remote Excalidraw MCP,
+For the local controller route, never use the blocked Chrome extension, Computer Use, remote Excalidraw MCP,
 `npx`, port 3000, or a second tab/server. WebSocket state is not durable; save
 owner/activity checkpoints during the mock with the controller's `checkpoint`
 command. At Finish, the visible specialist freezes the exact state with

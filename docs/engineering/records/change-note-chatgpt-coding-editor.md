@@ -75,3 +75,11 @@ custom-question rejection, incomplete verdicts and compiler error preservation.
 The actual Worker integration creates a custom question, serves the widget,
 saves source and reads the exact revision through authenticated MCP transport.
 Production acceptance and deployment receipts are recorded on the owning issue.
+
+The same read, draft, judge and drawing tools are also exposed on the existing
+bearer-authenticated MCP route for Codex and compatible CLI agents. Checked-in
+Codex configuration includes the tools and hosted Excalidraw connection;
+specialist instructions prefer MCP while retaining the existing browser/local
+canvas fallback. The integration test reads the same private draft through both
+OAuth-owner and bearer-owner transports. A working MCP connection alone does
+not establish that a particular installed host renders the interactive UI.

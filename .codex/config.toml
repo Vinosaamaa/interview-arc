@@ -98,6 +98,26 @@ enabled_tools = [
   "mark_activities_published",
   "backfill_practice_editorial",
   "get_practice_editorial",
+  "get_leetcode_connection",
+  "get_leetcode_problem",
+  "get_leetcode_recent_submissions",
+  "get_leetcode_submission",
+  "get_leetcode_editorial",
+  "open_coding_editor",
+  "get_coding_draft",
+  "save_coding_draft",
+  "submit_coding_draft",
+  "get_coding_submission",
+  "save_practice_drawing",
+  "get_practice_drawing",
 ]
+startup_timeout_sec = 15.0
+tool_timeout_sec = 60.0
+
+[mcp_servers.arc_excalidraw]
+enabled = true
+required = false
+url = "https://limitless-mcp.vinosama.workers.dev/mcp?surface=excalidraw"
+bearer_token_env_var = "INTERVIEW_ARC_MCP_TOKEN"
 startup_timeout_sec = 15.0
 tool_timeout_sec = 60.0
