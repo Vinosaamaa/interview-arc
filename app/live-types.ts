@@ -66,7 +66,7 @@ export type TranscriptTurn = {
   specialty: ActivityType;
   speaker: "user" | "specialist";
   body: string;
-  source: "codex" | "dictation" | "audio_transcript";
+  source: "codex" | "chatgpt" | "dictation" | "audio_transcript";
   sequence: number;
   occurredAt: number;
   updatedAt: number;

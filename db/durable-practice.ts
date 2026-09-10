@@ -770,6 +770,7 @@ export async function saveTypedPracticeExchange(
     };
   },
   nowMs: number,
+  source: "codex" | "chatgpt" = "codex",
 ) {
   if (input.userTurn.turnId === input.specialistTurn.turnId) {
     throw new Error("The user and specialist turns require different stable turn IDs.");
@@ -811,7 +812,7 @@ export async function saveTypedPracticeExchange(
       specialty: input.specialty,
       speaker: "user" as const,
       body: input.userTurn.body,
-      source: "codex" as const,
+      source,
       sequence: firstSequence,
       occurredAt: input.userTurn.occurredAt,
       updatedAt: nowMs,
@@ -823,7 +824,7 @@ export async function saveTypedPracticeExchange(
       specialty: input.specialty,
       speaker: "specialist" as const,
       body: input.specialistTurn.body,
-      source: "codex" as const,
+      source,
       sequence: firstSequence + 1,
       occurredAt: input.specialistTurn.occurredAt,
       updatedAt: nowMs,
@@ -1068,7 +1069,7 @@ export async function deleteTypedPracticeExchange(
           ${practiceTranscriptTurns.turnId} = ${pair.userTurn.turnId}
           AND ${practiceTranscriptTurns.specialty} = ${pair.userTurn.specialty}
           AND ${practiceTranscriptTurns.speaker} = 'user'
-          AND ${practiceTranscriptTurns.source} = 'codex'
+          AND ${practiceTranscriptTurns.source} = ${pair.userTurn.source}
           AND ${practiceTranscriptTurns.body} = ${pair.userTurn.body}
           AND ${practiceTranscriptTurns.sequence} = ${pair.userTurn.sequence}
           AND ${practiceTranscriptTurns.occurredAt} = ${pair.userTurn.occurredAt}
@@ -1077,7 +1078,7 @@ export async function deleteTypedPracticeExchange(
           ${practiceTranscriptTurns.turnId} = ${pair.responseTurn.turnId}
           AND ${practiceTranscriptTurns.specialty} = ${pair.responseTurn.specialty}
           AND ${practiceTranscriptTurns.speaker} = 'specialist'
-          AND ${practiceTranscriptTurns.source} = 'codex'
+          AND ${practiceTranscriptTurns.source} = ${pair.responseTurn.source}
           AND ${practiceTranscriptTurns.body} = ${pair.responseTurn.body}
           AND ${practiceTranscriptTurns.sequence} = ${pair.responseTurn.sequence}
           AND ${practiceTranscriptTurns.occurredAt} = ${pair.responseTurn.occurredAt}

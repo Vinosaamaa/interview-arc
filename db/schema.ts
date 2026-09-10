@@ -199,7 +199,7 @@ export const practiceTranscriptTurns = sqliteTable(
     specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
     speaker: text("speaker", { enum: ["user", "specialist"] }).notNull(),
     body: text("body").notNull(),
-    source: text("source", { enum: ["codex", "dictation", "audio_transcript"] }).notNull().default("codex"),
+    source: text("source", { enum: ["codex", "chatgpt", "dictation", "audio_transcript"] }).notNull().default("codex"),
     sequence: integer("sequence").notNull(),
     occurredAt: integer("occurred_at").notNull(),
     updatedAt,
