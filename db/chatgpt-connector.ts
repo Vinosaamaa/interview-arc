@@ -58,7 +58,8 @@ export async function createChatgptQuestion(db: Database, owner: string, input: 
   }
   const saved = await read();
   if (!saved || saved.fingerprint !== fingerprint) throw new ChatgptImportError("Question readback was not confirmed. Retry the identical request.", 503);
-  const verified = (await readChatgptBank(db, owner, input.specialty)).questions.find((q) => q.questionId === questionId);
+  const verified = existing ?? await db.prepare("SELECT title,prompt,url FROM owner_bank_questions WHERE owner_id = ? AND specialty = ? AND question_id = ?")
+    .bind(owner, input.specialty, questionId).first<{ title: string; prompt: string | null; url: string | null }>();
   if (!verified || !existing && (verified.title !== input.title || verified.prompt !== input.prompt || canonicalUrl(verified.url) !== url)) throw new ChatgptImportError("Question readback was not confirmed. Read the bank before reporting success.", 503);
   return JSON.parse(saved.receipt);
 }

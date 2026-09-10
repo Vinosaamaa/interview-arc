@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, exists, gt, inArray, isNotNull, isNull, lt, notExists, or, sql } from "drizzle-orm";
 import { getDb } from "./index";
+import type { NativeTranscriptSource, TypedTranscriptSource } from "./transcript-source";
 import { solutionProfileMissingRequirements } from "../app/solution-profile-policy";
 import {
   activityDeliveryAnalyses,
@@ -162,7 +163,7 @@ export type Specialty = "leetcode" | "system_design" | "behavioral";
 export type SpecialistTaskType = Specialty | "loop_recorder" | "learning_specialist" | "resume_cover_letter";
 export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
 export type TranscriptSpeaker = "user" | "specialist";
-export type TranscriptSource = "codex" | "dictation" | "audio_transcript";
+export type { TranscriptSource } from "./transcript-source";
 export type VoiceCaptureDecision = "activity_related" | "unrelated" | "uncertain";
 export type { ReviewReason } from "./review-cadence";
 export type { CodeAttemptReviewV1 } from "./code-attempt-review";
@@ -672,7 +673,7 @@ export async function appendTranscriptTurns(
     turnId: string;
     speaker: TranscriptSpeaker;
     body: string;
-    source?: TranscriptSource;
+    source?: NativeTranscriptSource;
     sequence: number;
     occurredAt: number;
   }>,
@@ -770,7 +771,7 @@ export async function saveTypedPracticeExchange(
     };
   },
   nowMs: number,
-  source: "codex" | "chatgpt" = "codex",
+  source: TypedTranscriptSource = "codex",
 ) {
   if (input.userTurn.turnId === input.specialistTurn.turnId) {
     throw new Error("The user and specialist turns require different stable turn IDs.");

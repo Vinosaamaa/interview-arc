@@ -67,7 +67,8 @@ test("signed Access assertion binds exact audience/issuer and normalizes browser
     const input = `${encode(header)}.${encode(payload)}`;
     return `${input}.${Buffer.from(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", keys.privateKey, Buffer.from(input))).toString("base64url")}`;
   }
-  const fetchKeys = async (url) => { assert.equal(url, `${config.CHATGPT_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`); return Response.json({ keys: [jwk] }); };
+  let fetchCount = 0; let providerKeys = [jwk]; let unavailable = false;
+  const fetchKeys = async (url) => { fetchCount++; assert.equal(url, `${config.CHATGPT_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`); return unavailable ? new Response(null, { status: 503 }) : Response.json({ keys: providerKeys }); };
   const request = (token) => new Request("https://arc.example/chatgpt/mcp", { headers: { "cf-access-jwt-assertion": token, "x-interview-arc-authenticated-email": "attacker@example.test", "oai-authenticated-user-email": "attacker@example.test" } });
   const owner = await resolveChatgptAccessOwner(request(await signed()), config, fetchKeys, now);
   assert.equal(owner, `u_${Buffer.from(await crypto.subtle.digest("SHA-256", Buffer.from("owner@example.test"))).toString("hex").slice(0, 32)}`);
@@ -77,6 +78,35 @@ test("signed Access assertion binds exact audience/issuer and normalizes browser
   assert.equal(await resolveChatgptAccessOwner(request(parts.join(".")), config, fetchKeys, now), null);
   assert.equal(await resolveChatgptAccessOwner(request(jwt), {}, fetchKeys, now), null);
   assert.equal(await resolveChatgptAccessOwner(request("ia_ordinary_integration_token_is_not_an_assertion"), config, fetchKeys, now), null);
+  const unknown = await signed(valid, { alg: "RS256", kid: "unknown" });
+  await Promise.all(Array.from({ length: 20 }, async () => assert.equal(await resolveChatgptAccessOwner(request(unknown), config, fetchKeys, now), null)));
+  assert.equal(fetchCount, 1, "unknown kids cannot trigger repeated refreshes during cooldown");
+  providerKeys = [{ ...jwk, kid: "rotated" }];
+  const rotated = await signed(valid, { alg: "RS256", kid: "rotated" });
+  await Promise.all(Array.from({ length: 20 }, async () => assert.equal(await resolveChatgptAccessOwner(request(rotated), config, fetchKeys, now + 61000), owner)));
+  assert.equal(fetchCount, 2, "concurrent key rotation shares one provider refresh");
+  unavailable = true;
+  assert.equal(await resolveChatgptAccessOwner(request(unknown), config, fetchKeys, now + 122000), null);
+  assert.equal(await resolveChatgptAccessOwner(request(unknown), config, fetchKeys, now + 123000), null);
+  assert.equal(fetchCount, 3, "failed provider refreshes also retain the cooldown");
+});
+
+test("a concurrent canonical create preserves the winner and an identical loser retry records a durable existing receipt", async () => {
+  const { db, sqlite } = database();
+  let insertWinner = true;
+  const competing = { ...db, async batch(statements) {
+    if (insertWinner) { insertWinner = false; await createChatgptQuestion(db, "race-owner", { ...question, operationId: "winner" }); }
+    return db.batch(statements);
+  } };
+  try {
+    await assert.rejects(createChatgptQuestion(competing, "race-owner", { ...question, operationId: "loser" }), /Retry identical content/);
+    const retry = await createChatgptQuestion(competing, "race-owner", { ...question, operationId: "loser" });
+    assert.equal(retry.status, "existing");
+    assert.equal((await createChatgptQuestion(competing, "race-owner", { ...question, operationId: "loser" })).duplicate, true);
+    assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM owner_bank_questions WHERE owner_id='race-owner'").get().n, 1);
+    assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM chatgpt_question_operations WHERE owner_id='race-owner'").get().n, 2);
+    assert.equal(sqlite.prepare("SELECT prompt FROM owner_bank_questions WHERE owner_id='race-owner'").get().prompt, question.prompt);
+  } finally { sqlite.close(); }
 });
 
 test("personal question SQL creates atomically, deduplicates, preserves canonical questions and isolates owners", async () => {

@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { TRANSCRIPT_SOURCES } from "./transcript-source";
 import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { BEHAVIORAL_PROJECT_FOCUS_VALUES } from "./behavioral-project-deep-dive-policy";
 
@@ -199,7 +200,7 @@ export const practiceTranscriptTurns = sqliteTable(
     specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
     speaker: text("speaker", { enum: ["user", "specialist"] }).notNull(),
     body: text("body").notNull(),
-    source: text("source", { enum: ["codex", "chatgpt", "dictation", "audio_transcript"] }).notNull().default("codex"),
+    source: text("source", { enum: TRANSCRIPT_SOURCES }).notNull().default("codex"),
     sequence: integer("sequence").notNull(),
     occurredAt: integer("occurred_at").notNull(),
     updatedAt,

@@ -23,12 +23,12 @@ capabilities: ["connected-private-practice"]
 amends: []
 supersedes: []
 learningRefs: []
-sources: [{"label":"Issue #453","url":"https://github.com/Vinosaamaa/interview-arc/issues/453","kind":"issue"}]
+sources: [{"label":"Issue #453","url":"https://github.com/Vinosaamaa/interview-arc/issues/453","kind":"issue"},{"label":"PR #455","url":"https://github.com/Vinosaamaa/interview-arc/pull/455","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["issue:453","tests/chatgpt-connector.test.mjs","tests/chatgpt-connector.integration.test.mjs"]}
 visibility: public-safe
 publicationEligibility: eligible
 issue: 453
-pr: null
+pr: 455
 release: null
 run: null
 ---
