@@ -1,6 +1,7 @@
 # Completed practice blocked by reference requirements
 
 Issue: [#453](https://github.com/Vinosaamaa/interview-arc/issues/453).
+Repair: [PR #460](https://github.com/Vinosaamaa/interview-arc/pull/460).
 
 ## Impact and detection
 
