@@ -590,7 +590,13 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       }
     };
     media.addEventListener("change", syncEvidenceLayout);
-    const syncPhone = () => setPhone(phoneMedia.matches);
+    const syncPhone = () => {
+      setPhone(phoneMedia.matches);
+      if (phoneMedia.matches) {
+        setMobileReaderOpen(true);
+        setEvidenceOpen(false);
+      }
+    };
     phoneMedia.addEventListener("change", syncPhone);
     return () => { media.removeEventListener("change", syncEvidenceLayout); phoneMedia.removeEventListener("change", syncPhone); };
   }, [journalLayer, view]);

@@ -121,16 +121,18 @@ export default function ReviewQueueView({
   const selectedKeySet = useMemo(() => new Set(selectedKeys), [selectedKeys]);
 
   useEffect(() => {
-    if (loading) return;
-    const frame = window.requestAnimationFrame(() => setUiState((current) => ({
-      ...current,
-      selectedKeys: current.selectedKeys.filter((key) => {
+    if (loading || stale || errorMessage) return;
+    const frame = window.requestAnimationFrame(() => setUiState((current) => {
+      const selectedKeys = current.selectedKeys.filter((key) => {
         const item = itemsByKey.get(key);
-        return item && !(item.questionId && blockedQuestionIds.has(item.questionId)) && !blockedTitles.has(identity(item.title));
-      }),
-    })));
+        return item
+          ? !(item.questionId && blockedQuestionIds.has(item.questionId)) && !blockedTitles.has(identity(item.title))
+          : pendingReviewKeys.has(key);
+      });
+      return selectedKeys.length === current.selectedKeys.length ? current : { ...current, selectedKeys };
+    }));
     return () => window.cancelAnimationFrame(frame);
-  }, [blockedQuestionIds, blockedTitles, itemsByKey, loading]);
+  }, [blockedQuestionIds, blockedTitles, errorMessage, itemsByKey, loading, pendingReviewKeys, stale]);
 
   const visibleItems = useMemo(() => filterReviewQueue(items, {
     search,

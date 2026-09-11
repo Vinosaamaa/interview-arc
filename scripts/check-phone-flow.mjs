@@ -10,11 +10,51 @@ const browser = await (engineName === "chromium" ? chromium : webkit).launch({ h
 const output = `.cache/phone-flow-${engineName}`;
 await mkdir(output, { recursive: true });
 const start = Date.parse("2026-09-01T17:00:00Z");
-const history = Array.from({ length: 16 }, (_, i) => ({ schemaVersion: 1, source: "extra", timingSource: "website", status: "completed", reviewDates: [], id: `phone-review-${i}`, title: `Synthetic ${String(i).padStart(2, "0")} design review with a complete title that remains readable in the cart`, type: "system_design", questionId: `phone-question-${i}`, date: "2026-09-01", timerGroupId: "fixture", allocatedSeconds: 3600, notes: "Synthetic UI fixture.", startedAt: new Date(start).toISOString(), endedAt: new Date(start + 2400000).toISOString() }));
-const source = { kind: "pasted_jd", displayLocator: "Synthetic role description", capturedAt: 1, fingerprint: "a".repeat(64) };
-const target = { targetId: "phone-target", label: "Known saved role", state: "active", company: "Synthetic Company", roleTitle: "Engineer", responsibilities: ["Build reliable services"], requiredQualifications: [], preferredQualifications: [], competencySignals: ["Design reliable services", "Explain tradeoffs", "Work across teams"], seniorityIndicators: [], domainVocabulary: [], verifiedCompanySignals: [], unresolvedAmbiguities: [], ownerNotes: [], source, revision: 1, createdAt: 1 };
-const facts = { loopCount: 1, activeLoopCount: 1, stageCount: 1, completedStageCount: 0, scheduledStageCount: 0, interviewDateCount: 0, outcomes: { offer: 0, rejected: 0, withdrawn: 0, closed: 0, unresolved: 1 } };
-const loop = { loop: { loopId: "phone-loop", company: "Synthetic Company", roleTitle: "Engineer", state: "active", status: "active", outcome: null, revision: 1, stages: [{ stageId: "technical", label: "Technical", order: 0, status: "planned" }] }, roleBrief: target, activityBindings: [{ activityId: history[0].id, stageId: "technical", roleBriefRevision: 1, specialty: "system_design", questionId: history[0].questionId, title: history[0].title, completed: true }], activityHistory: [{ activityId: history[0].id, stageId: "technical", roleBriefRevision: 1, specialty: "system_design", questionId: history[0].questionId, result: "solved", completedAt: start }], interviewMaterials: [] };
+const history = Array.from({ length: 16 }, (_, i) => ({
+  schemaVersion: 1, source: "extra", timingSource: "website", status: "completed",
+  id: `phone-review-${i}`, questionId: `phone-question-${i}`, type: "system_design",
+  title: `Synthetic ${String(i).padStart(2, "0")} design review with a complete title that remains readable in the cart`,
+  date: "2026-09-01", timerGroupId: "fixture", allocatedSeconds: 3600,
+  notes: "Synthetic UI fixture.", reviewDates: [],
+  startedAt: new Date(start).toISOString(), endedAt: new Date(start + 2400000).toISOString(),
+}));
+const source = {
+  kind: "pasted_jd", displayLocator: "Synthetic role description",
+  capturedAt: 1, fingerprint: "a".repeat(64),
+};
+const target = {
+  targetId: "phone-target", label: "Known saved role", state: "active",
+  company: "Synthetic Company", roleTitle: "Engineer",
+  responsibilities: ["Build reliable services"],
+  competencySignals: ["Design reliable services", "Explain tradeoffs", "Work across teams"],
+  requiredQualifications: [], preferredQualifications: [], seniorityIndicators: [],
+  domainVocabulary: [], verifiedCompanySignals: [], unresolvedAmbiguities: [], ownerNotes: [],
+  source, revision: 1, createdAt: 1,
+};
+const facts = {
+  loopCount: 1, activeLoopCount: 1, stageCount: 1, completedStageCount: 0,
+  scheduledStageCount: 0, interviewDateCount: 0,
+  outcomes: { offer: 0, rejected: 0, withdrawn: 0, closed: 0, unresolved: 1 },
+};
+const loop = {
+  loop: {
+    loopId: "phone-loop", company: "Synthetic Company", roleTitle: "Engineer",
+    state: "active", status: "active", outcome: null, revision: 1,
+    stages: [{ stageId: "technical", label: "Technical", order: 0, status: "planned" }],
+  },
+  roleBrief: target,
+  activityBindings: [{
+    activityId: history[0].id, stageId: "technical", roleBriefRevision: 1,
+    specialty: "system_design", questionId: history[0].questionId,
+    title: history[0].title, completed: true,
+  }],
+  activityHistory: [{
+    activityId: history[0].id, stageId: "technical", roleBriefRevision: 1,
+    specialty: "system_design", questionId: history[0].questionId,
+    result: "solved", completedAt: start,
+  }],
+  interviewMaterials: [],
+};
 
 try {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: "reduce" });
@@ -207,6 +247,11 @@ try {
   await page.setViewportSize({ width: 1000, height: 844 });
   await visit("view=banks");
   assert.ok(await page.locator(".problem-bank-list").evaluate(e => e.getBoundingClientRect().height >= 580 && getComputedStyle(e).overflowY === "auto"), "Desktop retains bounded results");
+  await visit("workspace=engineering&engineering=journal");
+  await page.getByRole("button", { name: "Open evidence", exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Open evidence", exact: true }).waitFor();
+  assert.equal(await page.locator(".phone-sheet[open]").count(), 0, "Entering phone width closes auxiliary panels");
   assert.deepEqual(errors, []);
   console.log(`PASS ${engineName}: staged cart, durable failure/retry, response recovery, result width, safe-area geometry, document scrolling, full-screen navigation, Loop collapse and desktop boundary`);
 } finally {

@@ -1909,6 +1909,9 @@ export default function HomeClient({ content, today, engineering, initialLocatio
   const [bankStarFilter, setBankStarFilter] = useState<"all" | "starred">("all");
   const [bankTopicsExpanded, setBankTopicsExpanded] = useState(false);
   const [bankVisibleCount, setBankVisibleCount] = useState(BANK_INITIAL_VISIBLE_COUNT);
+  const loadMoreBankQuestions = useCallback((total: number) => {
+    setBankVisibleCount(current => nextBankVisibleCount(current, total));
+  }, []);
   const [expandedBankDesk, setExpandedBankDesk] = useState<ActivityType | null>(null);
   const composerSpecialtyViewsRef = useRef<ComposerSpecialtyViews>(createComposerSpecialtyViews());
   const [composerAttentionFilters, setComposerAttentionFilters] = useState<ComposerAttentionFilter[]>([]);
@@ -6101,7 +6104,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
             <div className="bank-entry-meta"><span>{question.targetMinutes} min estimate</span>{question.problemNumber && <small>#{question.problemNumber}{typeof question.acceptanceRate === "number" ? ` · ${question.acceptanceRate.toFixed(1)}% acceptance` : ""}</small>}{question.companySignals?.[0] && <small>{question.companySignals[0].company} frequency {question.companySignals[0].frequencyScore}/{question.companySignals[0].frequencyScale} · {question.companySignals[0].window}</small>}{question.answerFormat && <small>{question.answerFormat} answer · {question.frequency ?? "medium"} frequency</small>}{question.solutionReference && <small>Reference solution{question.referenceAccess === "may_require_sign_in" ? " may require sign-in" : " available"}</small>}<small className={`content-tags ${type}`}>{tags.slice(0, 4).map((tag) => `#${tag}`).join("  ")}</small></div>
             <div className="bank-entry-actions"><MobileRowActions title={question.title}><StaticResultFlag outcome={latestAttempt?.outcome} /><button className={`icon-action ${isStarred(type, question.id) ? "active starred" : ""}`} onClick={() => toggleProblemStar(type, question.id)} aria-label={`${isStarred(type, question.id) ? "Unstar" : "Star"} ${question.title}`} title={isStarred(type, question.id) ? "Unstar" : "Star"}><Icon name="star" /></button><button className={`icon-action solution-control ${reusableSolution ? "solution-available" : ""}`} onClick={() => openProblemProfile(type, question)} disabled={!reusableSolution} aria-label={reusableSolution ? `View solution for ${question.title}` : `No reusable solution for ${question.title}`} title={reusableSolution ? "View solution" : "No reusable solution yet"}><Icon name="book" /></button><button className="icon-action practice" onClick={() => addBankQuestionToToday(question, type)} disabled={blockedToday} aria-label={blockedToday ? `${question.title} is already on Today` : `Practice ${question.title} today`} title={blockedToday ? "Already on Today" : "Practice today"}><Icon name="plus" /></button></MobileRowActions></div>
           </article>; })}
-          {mountedEntries.length < visibleEntries.length && <BankProgressiveStatus mounted={mountedEntries.length} total={visibleEntries.length} onLoadMore={() => setBankVisibleCount((current) => nextBankVisibleCount(current, visibleEntries.length))} />}
+          {mountedEntries.length < visibleEntries.length && <BankProgressiveStatus mounted={mountedEntries.length} total={visibleEntries.length} onLoadMore={loadMoreBankQuestions} />}
           {!visibleEntries.length && <div className="quiet-empty bank-empty"><strong>No questions match these filters.</strong><span>Change type, progress, level, or search text.</span></div>}
         </div>
         </div>

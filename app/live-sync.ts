@@ -273,7 +273,8 @@ export function useLiveState(date: string): LiveStateController {
   const lastPracticeSyncServerNowRef = useRef(0);
 
   const persistQueue = useCallback(() => {
-    setQueuedReviewKeys(queueRef.current.flatMap(mutation => mutation.type === "review-add-today" ? mutation.reviewKeys : []));
+    const reviewKeys = queueRef.current.flatMap(mutation => mutation.type === "review-add-today" ? mutation.reviewKeys : []);
+    setQueuedReviewKeys(current => current.length === reviewKeys.length && current.every((key, index) => key === reviewKeys[index]) ? current : reviewKeys);
     try {
       window.localStorage.setItem(queueKey(date), JSON.stringify(queueRef.current));
     } catch {
