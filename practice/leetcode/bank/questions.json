@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-17",
+  "updatedAt": "2026-09-11",
   "questions": [
     {
       "id": "two-sum",
@@ -9,7 +9,10 @@
       "url": "https://leetcode.com/problems/two-sum/",
       "difficulty": "easy",
       "acceptanceRate": 57.8,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Arrays & Hashing"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -33,7 +36,10 @@
       "url": "https://leetcode.com/problems/add-two-numbers/",
       "difficulty": "medium",
       "acceptanceRate": 48.9,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Linked List"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -57,7 +63,10 @@
       "url": "https://leetcode.com/problems/longest-substring-without-repeating-characters/",
       "difficulty": "medium",
       "acceptanceRate": 39.5,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Sliding Window"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -81,7 +90,10 @@
       "url": "https://leetcode.com/problems/median-of-two-sorted-arrays/",
       "difficulty": "hard",
       "acceptanceRate": 47.1,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Binary Search"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -105,7 +117,10 @@
       "url": "https://leetcode.com/problems/longest-palindromic-substring/",
       "difficulty": "medium",
       "acceptanceRate": 38.2,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "1-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -129,7 +144,10 @@
       "url": "https://leetcode.com/problems/regular-expression-matching/",
       "difficulty": "hard",
       "acceptanceRate": 31.3,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "2-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -153,7 +171,10 @@
       "url": "https://leetcode.com/problems/container-with-most-water/",
       "difficulty": "medium",
       "acceptanceRate": 60.4,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Two Pointers"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -225,7 +246,10 @@
       "url": "https://leetcode.com/problems/3sum/",
       "difficulty": "medium",
       "acceptanceRate": 39.5,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Two Pointers"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -249,7 +273,10 @@
       "url": "https://leetcode.com/problems/valid-parentheses/",
       "difficulty": "easy",
       "acceptanceRate": 44.5,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Stack"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -273,7 +300,10 @@
       "url": "https://leetcode.com/problems/merge-two-sorted-lists/",
       "difficulty": "easy",
       "acceptanceRate": 68.6,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Linked List"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -297,7 +327,10 @@
       "url": "https://leetcode.com/problems/generate-parentheses/",
       "difficulty": "medium",
       "acceptanceRate": 78.9,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Stack"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -320,8 +353,11 @@
       "title": "Merge k Sorted Lists",
       "url": "https://leetcode.com/problems/merge-k-sorted-lists/",
       "difficulty": "hard",
-      "acceptanceRate": 60.0,
-      "topics": [],
+      "acceptanceRate": 60,
+      "topics": [
+        "NeetCode 150",
+        "Linked List"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -369,7 +405,10 @@
       "url": "https://leetcode.com/problems/reverse-nodes-in-k-group/",
       "difficulty": "hard",
       "acceptanceRate": 66.6,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Linked List"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -441,7 +480,10 @@
       "url": "https://leetcode.com/problems/search-in-rotated-sorted-array/",
       "difficulty": "medium",
       "acceptanceRate": 45.2,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Binary Search"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -489,7 +531,10 @@
       "url": "https://leetcode.com/problems/valid-sudoku/",
       "difficulty": "medium",
       "acceptanceRate": 64.8,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Arrays & Hashing"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -513,7 +558,10 @@
       "url": "https://leetcode.com/problems/combination-sum/",
       "difficulty": "medium",
       "acceptanceRate": 76.8,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Backtracking"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -537,7 +585,10 @@
       "url": "https://leetcode.com/problems/combination-sum-ii/",
       "difficulty": "medium",
       "acceptanceRate": 59.8,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Backtracking"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -561,7 +612,10 @@
       "url": "https://leetcode.com/problems/trapping-rain-water/",
       "difficulty": "hard",
       "acceptanceRate": 67.8,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Two Pointers"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -585,7 +639,10 @@
       "url": "https://leetcode.com/problems/multiply-strings/",
       "difficulty": "medium",
       "acceptanceRate": 44.5,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Math & Geometry"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -609,7 +666,10 @@
       "url": "https://leetcode.com/problems/jump-game-ii/",
       "difficulty": "medium",
       "acceptanceRate": 43.2,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Greedy"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -633,7 +693,10 @@
       "url": "https://leetcode.com/problems/permutations/",
       "difficulty": "medium",
       "acceptanceRate": 82.1,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Backtracking"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -681,7 +744,10 @@
       "url": "https://leetcode.com/problems/group-anagrams/",
       "difficulty": "medium",
       "acceptanceRate": 72.9,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Arrays & Hashing"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -704,8 +770,11 @@
       "title": "Pow(x, n)",
       "url": "https://leetcode.com/problems/powx-n/",
       "difficulty": "medium",
-      "acceptanceRate": 39.0,
-      "topics": [],
+      "acceptanceRate": 39,
+      "topics": [
+        "NeetCode 150",
+        "Math & Geometry"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -728,8 +797,11 @@
       "title": "N-Queens",
       "url": "https://leetcode.com/problems/n-queens/",
       "difficulty": "hard",
-      "acceptanceRate": 76.0,
-      "topics": [],
+      "acceptanceRate": 76,
+      "topics": [
+        "NeetCode 150",
+        "Backtracking"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -753,7 +825,10 @@
       "url": "https://leetcode.com/problems/maximum-subarray/",
       "difficulty": "medium",
       "acceptanceRate": 53.6,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Greedy"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -777,7 +852,10 @@
       "url": "https://leetcode.com/problems/spiral-matrix/",
       "difficulty": "medium",
       "acceptanceRate": 57.3,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Math & Geometry"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -801,7 +879,10 @@
       "url": "https://leetcode.com/problems/jump-game/",
       "difficulty": "medium",
       "acceptanceRate": 41.2,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Greedy"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -825,7 +906,10 @@
       "url": "https://leetcode.com/problems/merge-intervals/",
       "difficulty": "medium",
       "acceptanceRate": 52.3,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Intervals"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -873,7 +957,10 @@
       "url": "https://leetcode.com/problems/insert-interval/",
       "difficulty": "medium",
       "acceptanceRate": 45.6,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Intervals"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -896,8 +983,11 @@
       "title": "Unique Paths",
       "url": "https://leetcode.com/problems/unique-paths/",
       "difficulty": "medium",
-      "acceptanceRate": 67.0,
-      "topics": [],
+      "acceptanceRate": 67,
+      "topics": [
+        "NeetCode 150",
+        "2-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -945,7 +1035,10 @@
       "url": "https://leetcode.com/problems/plus-one/",
       "difficulty": "easy",
       "acceptanceRate": 50.2,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Math & Geometry"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1017,7 +1110,10 @@
       "url": "https://leetcode.com/problems/climbing-stairs/",
       "difficulty": "easy",
       "acceptanceRate": 54.2,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "1-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1040,7 +1136,7 @@
       "title": "Simplify Path",
       "url": "https://leetcode.com/problems/simplify-path/",
       "difficulty": "medium",
-      "acceptanceRate": 51.0,
+      "acceptanceRate": 51,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -1065,7 +1161,10 @@
       "url": "https://leetcode.com/problems/edit-distance/",
       "difficulty": "medium",
       "acceptanceRate": 60.9,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "2-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1088,7 +1187,7 @@
       "title": "Sort Colors",
       "url": "https://leetcode.com/problems/sort-colors/",
       "difficulty": "medium",
-      "acceptanceRate": 70.0,
+      "acceptanceRate": 70,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -1112,8 +1211,11 @@
       "title": "Minimum Window Substring",
       "url": "https://leetcode.com/problems/minimum-window-substring/",
       "difficulty": "hard",
-      "acceptanceRate": 48.0,
-      "topics": [],
+      "acceptanceRate": 48,
+      "topics": [
+        "NeetCode 150",
+        "Sliding Window"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1137,7 +1239,10 @@
       "url": "https://leetcode.com/problems/subsets/",
       "difficulty": "medium",
       "acceptanceRate": 82.6,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Backtracking"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1160,7 +1265,7 @@
       "title": "Remove Duplicates from Sorted Array II",
       "url": "https://leetcode.com/problems/remove-duplicates-from-sorted-array-ii/",
       "difficulty": "medium",
-      "acceptanceRate": 65.0,
+      "acceptanceRate": 65,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -1185,7 +1290,10 @@
       "url": "https://leetcode.com/problems/word-search/",
       "difficulty": "medium",
       "acceptanceRate": 47.7,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Backtracking"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1257,7 +1365,10 @@
       "url": "https://leetcode.com/problems/decode-ways/",
       "difficulty": "medium",
       "acceptanceRate": 38.2,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "1-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1329,7 +1440,10 @@
       "url": "https://leetcode.com/problems/construct-binary-tree-from-preorder-and-inorder-traversal/",
       "difficulty": "medium",
       "acceptanceRate": 69.2,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Trees"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1401,7 +1515,10 @@
       "url": "https://leetcode.com/problems/best-time-to-buy-and-sell-stock/",
       "difficulty": "easy",
       "acceptanceRate": 57.1,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Sliding Window"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1473,7 +1590,10 @@
       "url": "https://leetcode.com/problems/binary-tree-maximum-path-sum/",
       "difficulty": "hard",
       "acceptanceRate": 42.5,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Trees"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1497,7 +1617,10 @@
       "url": "https://leetcode.com/problems/valid-palindrome/",
       "difficulty": "easy",
       "acceptanceRate": 53.8,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Two Pointers"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1520,8 +1643,11 @@
       "title": "Word Ladder",
       "url": "https://leetcode.com/problems/word-ladder/",
       "difficulty": "hard",
-      "acceptanceRate": 46.0,
-      "topics": [],
+      "acceptanceRate": 46,
+      "topics": [
+        "NeetCode 150",
+        "Graphs"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1545,7 +1671,10 @@
       "url": "https://leetcode.com/problems/longest-consecutive-sequence/",
       "difficulty": "medium",
       "acceptanceRate": 47.2,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Arrays & Hashing"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1617,7 +1746,10 @@
       "url": "https://leetcode.com/problems/reorder-list/",
       "difficulty": "medium",
       "acceptanceRate": 65.7,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Linked List"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1641,7 +1773,10 @@
       "url": "https://leetcode.com/problems/word-break/",
       "difficulty": "medium",
       "acceptanceRate": 49.7,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "1-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1665,7 +1800,10 @@
       "url": "https://leetcode.com/problems/lru-cache/",
       "difficulty": "medium",
       "acceptanceRate": 47.7,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Linked List"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1737,7 +1875,10 @@
       "url": "https://leetcode.com/problems/maximum-product-subarray/",
       "difficulty": "medium",
       "acceptanceRate": 36.7,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "1-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1760,8 +1901,11 @@
       "title": "Find Minimum in Rotated Sorted Array",
       "url": "https://leetcode.com/problems/find-minimum-in-rotated-sorted-array/",
       "difficulty": "medium",
-      "acceptanceRate": 55.0,
-      "topics": [],
+      "acceptanceRate": 55,
+      "topics": [
+        "NeetCode 150",
+        "Binary Search"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -1904,7 +2048,7 @@
       "title": "Find All Possible Recipes from Given Supplies",
       "url": "https://leetcode.com/problems/find-all-possible-recipes-from-given-supplies/",
       "difficulty": "medium",
-      "acceptanceRate": 57.0,
+      "acceptanceRate": 57,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -2001,7 +2145,10 @@
       "url": "https://leetcode.com/problems/house-robber/",
       "difficulty": "medium",
       "acceptanceRate": 53.4,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "1-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2025,7 +2172,10 @@
       "url": "https://leetcode.com/problems/binary-tree-right-side-view/",
       "difficulty": "medium",
       "acceptanceRate": 70.7,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Trees"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2049,7 +2199,10 @@
       "url": "https://leetcode.com/problems/number-of-islands/",
       "difficulty": "medium",
       "acceptanceRate": 64.8,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Graphs"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2096,8 +2249,11 @@
       "title": "Happy Number",
       "url": "https://leetcode.com/problems/happy-number/",
       "difficulty": "easy",
-      "acceptanceRate": 60.0,
-      "topics": [],
+      "acceptanceRate": 60,
+      "topics": [
+        "NeetCode 150",
+        "Math & Geometry"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2121,7 +2277,10 @@
       "url": "https://leetcode.com/problems/reverse-linked-list/",
       "difficulty": "easy",
       "acceptanceRate": 80.8,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Linked List"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2145,7 +2304,10 @@
       "url": "https://leetcode.com/problems/course-schedule/",
       "difficulty": "medium",
       "acceptanceRate": 51.8,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Graphs"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2193,7 +2355,10 @@
       "url": "https://leetcode.com/problems/course-schedule-ii/",
       "difficulty": "medium",
       "acceptanceRate": 55.9,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Graphs"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2217,7 +2382,10 @@
       "url": "https://leetcode.com/problems/implement-trie-prefix-tree/",
       "difficulty": "medium",
       "acceptanceRate": 69.8,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Tries"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2241,7 +2409,10 @@
       "url": "https://leetcode.com/problems/house-robber-ii/",
       "difficulty": "medium",
       "acceptanceRate": 45.2,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "1-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2265,7 +2436,10 @@
       "url": "https://leetcode.com/problems/kth-largest-element-in-an-array/",
       "difficulty": "medium",
       "acceptanceRate": 69.1,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Heap / Priority Queue"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2312,7 +2486,7 @@
       "title": "Basic Calculator",
       "url": "https://leetcode.com/problems/basic-calculator/",
       "difficulty": "hard",
-      "acceptanceRate": 47.0,
+      "acceptanceRate": 47,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -2336,7 +2510,7 @@
       "title": "Basic Calculator II",
       "url": "https://leetcode.com/problems/basic-calculator-ii/",
       "difficulty": "medium",
-      "acceptanceRate": 47.0,
+      "acceptanceRate": 47,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -2384,8 +2558,11 @@
       "title": "Sliding Window Maximum",
       "url": "https://leetcode.com/problems/sliding-window-maximum/",
       "difficulty": "hard",
-      "acceptanceRate": 49.0,
-      "topics": [],
+      "acceptanceRate": 49,
+      "topics": [
+        "NeetCode 150",
+        "Sliding Window"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2433,7 +2610,10 @@
       "url": "https://leetcode.com/problems/meeting-rooms/",
       "difficulty": "easy",
       "acceptanceRate": 59.5,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Intervals"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2457,7 +2637,10 @@
       "url": "https://leetcode.com/problems/meeting-rooms-ii/",
       "difficulty": "medium",
       "acceptanceRate": 52.7,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Intervals"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2505,7 +2688,10 @@
       "url": "https://leetcode.com/problems/graph-valid-tree/",
       "difficulty": "medium",
       "acceptanceRate": 50.1,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Graphs"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2529,7 +2715,10 @@
       "url": "https://leetcode.com/problems/alien-dictionary/",
       "difficulty": "hard",
       "acceptanceRate": 37.3,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Advanced Graphs"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2601,7 +2790,10 @@
       "url": "https://leetcode.com/problems/walls-and-gates/",
       "difficulty": "medium",
       "acceptanceRate": 64.1,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Graphs"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2625,7 +2817,10 @@
       "url": "https://leetcode.com/problems/find-median-from-data-stream/",
       "difficulty": "hard",
       "acceptanceRate": 54.7,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Heap / Priority Queue"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2649,7 +2844,10 @@
       "url": "https://leetcode.com/problems/serialize-and-deserialize-binary-tree/",
       "difficulty": "hard",
       "acceptanceRate": 61.1,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Trees"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2673,7 +2871,10 @@
       "url": "https://leetcode.com/problems/longest-increasing-subsequence/",
       "difficulty": "medium",
       "acceptanceRate": 59.7,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "1-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2696,7 +2897,7 @@
       "title": "Remove Invalid Parentheses",
       "url": "https://leetcode.com/problems/remove-invalid-parentheses/",
       "difficulty": "hard",
-      "acceptanceRate": 50.0,
+      "acceptanceRate": 50,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -2768,7 +2969,7 @@
       "title": "Shortest Distance from All Buildings",
       "url": "https://leetcode.com/problems/shortest-distance-from-all-buildings/",
       "difficulty": "hard",
-      "acceptanceRate": 45.0,
+      "acceptanceRate": 45,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -2793,7 +2994,10 @@
       "url": "https://leetcode.com/problems/coin-change/",
       "difficulty": "medium",
       "acceptanceRate": 48.8,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "1-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2817,7 +3021,10 @@
       "url": "https://leetcode.com/problems/longest-increasing-path-in-a-matrix/",
       "difficulty": "hard",
       "acceptanceRate": 56.8,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "2-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2865,7 +3072,10 @@
       "url": "https://leetcode.com/problems/top-k-frequent-elements/",
       "difficulty": "medium",
       "acceptanceRate": 66.9,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Arrays & Hashing"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -2912,7 +3122,7 @@
       "title": "Rearrange String k Distance Apart",
       "url": "https://leetcode.com/problems/rearrange-string-k-distance-apart/",
       "difficulty": "hard",
-      "acceptanceRate": 40.0,
+      "acceptanceRate": 40,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -2937,7 +3147,10 @@
       "url": "https://leetcode.com/problems/search-a-2d-matrix/",
       "difficulty": "medium",
       "acceptanceRate": 54.3,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Binary Search"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -3177,7 +3390,10 @@
       "url": "https://leetcode.com/problems/partition-equal-subset-sum/",
       "difficulty": "medium",
       "acceptanceRate": 49.7,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "1-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -3201,7 +3417,10 @@
       "url": "https://leetcode.com/problems/pacific-atlantic-water-flow/",
       "difficulty": "medium",
       "acceptanceRate": 61.2,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Graphs"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -3249,7 +3468,10 @@
       "url": "https://leetcode.com/problems/non-overlapping-intervals/",
       "difficulty": "medium",
       "acceptanceRate": 57.4,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Intervals"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -3296,7 +3518,7 @@
       "title": "Length of the Longest Alphabetical Continuous Substring",
       "url": "https://leetcode.com/problems/length-of-the-longest-alphabetical-continuous-substring/",
       "difficulty": "medium",
-      "acceptanceRate": 61.0,
+      "acceptanceRate": 61,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -3513,7 +3735,10 @@
       "url": "https://leetcode.com/problems/coin-change-ii/",
       "difficulty": "medium",
       "acceptanceRate": 59.6,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "2-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -3657,7 +3882,10 @@
       "url": "https://leetcode.com/problems/task-scheduler/",
       "difficulty": "medium",
       "acceptanceRate": 63.4,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Heap / Priority Queue"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -3680,7 +3908,7 @@
       "title": "Find the Score of All Prefixes of an Array",
       "url": "https://leetcode.com/problems/find-the-score-of-all-prefixes-of-an-array/",
       "difficulty": "medium",
-      "acceptanceRate": 73.0,
+      "acceptanceRate": 73,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -3704,7 +3932,7 @@
       "title": "Design Search Autocomplete System",
       "url": "https://leetcode.com/problems/design-search-autocomplete-system/",
       "difficulty": "hard",
-      "acceptanceRate": 50.0,
+      "acceptanceRate": 50,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -3825,7 +4053,10 @@
       "url": "https://leetcode.com/problems/valid-parenthesis-string/",
       "difficulty": "medium",
       "acceptanceRate": 40.3,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Greedy"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -3872,7 +4103,7 @@
       "title": "Stickers to Spell Word",
       "url": "https://leetcode.com/problems/stickers-to-spell-word/",
       "difficulty": "hard",
-      "acceptanceRate": 51.0,
+      "acceptanceRate": 51,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -3921,7 +4152,10 @@
       "url": "https://leetcode.com/problems/max-area-of-island/",
       "difficulty": "medium",
       "acceptanceRate": 74.1,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Graphs"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -4017,7 +4251,10 @@
       "url": "https://leetcode.com/problems/daily-temperatures/",
       "difficulty": "medium",
       "acceptanceRate": 68.9,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Stack"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -4160,7 +4397,7 @@
       "title": "Count Complete Subarrays in an Array",
       "url": "https://leetcode.com/problems/count-complete-subarrays-in-an-array/",
       "difficulty": "medium",
-      "acceptanceRate": 76.0,
+      "acceptanceRate": 76,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -4305,7 +4542,10 @@
       "url": "https://leetcode.com/problems/koko-eating-bananas/",
       "difficulty": "medium",
       "acceptanceRate": 50.2,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Binary Search"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -4497,7 +4737,10 @@
       "url": "https://leetcode.com/problems/rotting-oranges/",
       "difficulty": "medium",
       "acceptanceRate": 59.1,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Graphs"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -4520,7 +4763,7 @@
       "title": "Max Consecutive Ones III",
       "url": "https://leetcode.com/problems/max-consecutive-ones-iii/",
       "difficulty": "medium",
-      "acceptanceRate": 68.0,
+      "acceptanceRate": 68,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -4617,7 +4860,10 @@
       "url": "https://leetcode.com/problems/longest-common-subsequence/",
       "difficulty": "medium",
       "acceptanceRate": 59.4,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "2-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -4832,7 +5078,7 @@
       "title": "Maximum Points You Can Obtain from Cards",
       "url": "https://leetcode.com/problems/maximum-points-you-can-obtain-from-cards/",
       "difficulty": "medium",
-      "acceptanceRate": 58.0,
+      "acceptanceRate": 58,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -4928,7 +5174,7 @@
       "title": "Furthest Building You Can Reach",
       "url": "https://leetcode.com/problems/furthest-building-you-can-reach/",
       "difficulty": "medium",
-      "acceptanceRate": 51.0,
+      "acceptanceRate": 51,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -5001,7 +5247,10 @@
       "url": "https://leetcode.com/problems/remove-nth-node-from-end-of-list/",
       "difficulty": "medium",
       "acceptanceRate": 52.1,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Linked List"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -5192,7 +5441,7 @@
       "title": "Valid Word Abbreviation",
       "url": "https://leetcode.com/problems/valid-word-abbreviation/",
       "difficulty": "easy",
-      "acceptanceRate": 37.0,
+      "acceptanceRate": 37,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -5265,7 +5514,10 @@
       "url": "https://leetcode.com/problems/gas-station/",
       "difficulty": "medium",
       "acceptanceRate": 48.3,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Greedy"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -5288,7 +5540,7 @@
       "title": "Find All Duplicates in an Array",
       "url": "https://leetcode.com/problems/find-all-duplicates-in-an-array/",
       "difficulty": "medium",
-      "acceptanceRate": 77.0,
+      "acceptanceRate": 77,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -5313,7 +5565,10 @@
       "url": "https://leetcode.com/problems/word-search-ii/",
       "difficulty": "hard",
       "acceptanceRate": 38.7,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Tries"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -5432,7 +5687,7 @@
       "title": "Water and Jug Problem",
       "url": "https://leetcode.com/problems/water-and-jug-problem/",
       "difficulty": "medium",
-      "acceptanceRate": 46.0,
+      "acceptanceRate": 46,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -5505,7 +5760,10 @@
       "url": "https://leetcode.com/problems/number-of-connected-components-in-an-undirected-graph/",
       "difficulty": "medium",
       "acceptanceRate": 65.1,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Graphs"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -5529,7 +5787,10 @@
       "url": "https://leetcode.com/problems/permutation-in-string/",
       "difficulty": "medium",
       "acceptanceRate": 49.3,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Sliding Window"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -5553,7 +5814,10 @@
       "url": "https://leetcode.com/problems/min-cost-to-connect-all-points/",
       "difficulty": "medium",
       "acceptanceRate": 71.3,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Advanced Graphs"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -5576,7 +5840,7 @@
       "title": "Find the Celebrity",
       "url": "https://leetcode.com/problems/find-the-celebrity/",
       "difficulty": "medium",
-      "acceptanceRate": 49.0,
+      "acceptanceRate": 49,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -5697,7 +5961,10 @@
       "url": "https://leetcode.com/problems/copy-list-with-random-pointer/",
       "difficulty": "medium",
       "acceptanceRate": 63.3,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Linked List"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -5768,7 +6035,7 @@
       "title": "Reorder Routes to Make All Paths Lead to the City Zero",
       "url": "https://leetcode.com/problems/reorder-routes-to-make-all-paths-lead-to-the-city-zero/",
       "difficulty": "medium",
-      "acceptanceRate": 66.0,
+      "acceptanceRate": 66,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -5888,7 +6155,7 @@
       "title": "Max Stack",
       "url": "https://leetcode.com/problems/max-stack/",
       "difficulty": "hard",
-      "acceptanceRate": 46.0,
+      "acceptanceRate": 46,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -5960,8 +6227,11 @@
       "title": "Time Based Key-Value Store",
       "url": "https://leetcode.com/problems/time-based-key-value-store/",
       "difficulty": "medium",
-      "acceptanceRate": 50.0,
-      "topics": [],
+      "acceptanceRate": 50,
+      "topics": [
+        "NeetCode 150",
+        "Binary Search"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -5985,7 +6255,10 @@
       "url": "https://leetcode.com/problems/diameter-of-binary-tree/",
       "difficulty": "easy",
       "acceptanceRate": 65.9,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Trees"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -6033,7 +6306,10 @@
       "url": "https://leetcode.com/problems/find-the-duplicate-number/",
       "difficulty": "medium",
       "acceptanceRate": 64.6,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Linked List"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -6249,7 +6525,10 @@
       "url": "https://leetcode.com/problems/design-add-and-search-words-data-structure/",
       "difficulty": "medium",
       "acceptanceRate": 48.7,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Tries"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -6297,7 +6576,10 @@
       "url": "https://leetcode.com/problems/best-time-to-buy-and-sell-stock-with-cooldown/",
       "difficulty": "medium",
       "acceptanceRate": 62.4,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "2-D Dynamic Programming"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -6513,7 +6795,10 @@
       "url": "https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/",
       "difficulty": "medium",
       "acceptanceRate": 65.5,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Two Pointers"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -6585,7 +6870,10 @@
       "url": "https://leetcode.com/problems/kth-smallest-element-in-a-bst/",
       "difficulty": "medium",
       "acceptanceRate": 77.1,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Trees"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -6632,7 +6920,7 @@
       "title": "Add Two Integers",
       "url": "https://leetcode.com/problems/add-two-integers/",
       "difficulty": "easy",
-      "acceptanceRate": 88.0,
+      "acceptanceRate": 88,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -7065,7 +7353,10 @@
       "url": "https://leetcode.com/problems/largest-rectangle-in-histogram/",
       "difficulty": "hard",
       "acceptanceRate": 50.4,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Stack"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -7304,7 +7595,7 @@
       "title": "Robot Room Cleaner",
       "url": "https://leetcode.com/problems/robot-room-cleaner/",
       "difficulty": "hard",
-      "acceptanceRate": 78.0,
+      "acceptanceRate": 78,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -7449,7 +7740,10 @@
       "url": "https://leetcode.com/problems/encode-and-decode-strings/",
       "difficulty": "medium",
       "acceptanceRate": 51.8,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Arrays & Hashing"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -7520,7 +7814,7 @@
       "title": "Course Schedule IV",
       "url": "https://leetcode.com/problems/course-schedule-iv/",
       "difficulty": "medium",
-      "acceptanceRate": 60.0,
+      "acceptanceRate": 60,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -7712,7 +8006,7 @@
       "title": "Employee Free Time",
       "url": "https://leetcode.com/problems/employee-free-time/",
       "difficulty": "hard",
-      "acceptanceRate": 73.0,
+      "acceptanceRate": 73,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -7881,7 +8175,10 @@
       "url": "https://leetcode.com/problems/cheapest-flights-within-k-stops/",
       "difficulty": "medium",
       "acceptanceRate": 42.2,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Advanced Graphs"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -7904,7 +8201,7 @@
       "title": "Product of the Last K Numbers",
       "url": "https://leetcode.com/problems/product-of-the-last-k-numbers/",
       "difficulty": "medium",
-      "acceptanceRate": 63.0,
+      "acceptanceRate": 63,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -7976,7 +8273,7 @@
       "title": "Department Top Three Salaries",
       "url": "https://leetcode.com/problems/department-top-three-salaries/",
       "difficulty": "hard",
-      "acceptanceRate": 61.0,
+      "acceptanceRate": 61,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -8073,7 +8370,10 @@
       "url": "https://leetcode.com/problems/rotate-image/",
       "difficulty": "medium",
       "acceptanceRate": 80.4,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Math & Geometry"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -8193,7 +8493,10 @@
       "url": "https://leetcode.com/problems/surrounded-regions/",
       "difficulty": "medium",
       "acceptanceRate": 45.8,
-      "topics": [],
+      "topics": [
+        "NeetCode 150",
+        "Graphs"
+      ],
       "companyTags": [
         "TikTok"
       ],
@@ -8288,7 +8591,7 @@
       "title": "Maximum Number of Events That Can Be Attended",
       "url": "https://leetcode.com/problems/maximum-number-of-events-that-can-be-attended/",
       "difficulty": "medium",
-      "acceptanceRate": 39.0,
+      "acceptanceRate": 39,
       "topics": [],
       "companyTags": [
         "TikTok"
@@ -8400,6 +8703,741 @@
       ],
       "targetMinutes": 30,
       "source": "user_import",
+      "active": true
+    },
+    {
+      "id": "reverse-integer",
+      "problemNumber": 7,
+      "title": "Reverse Integer",
+      "url": "https://leetcode.com/problems/reverse-integer/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Bit Manipulation"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "letter-combinations-of-a-phone-number",
+      "problemNumber": 17,
+      "title": "Letter Combinations of a Phone Number",
+      "url": "https://leetcode.com/problems/letter-combinations-of-a-phone-number/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Backtracking"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "set-matrix-zeroes",
+      "problemNumber": 73,
+      "title": "Set Matrix Zeroes",
+      "url": "https://leetcode.com/problems/set-matrix-zeroes/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Math & Geometry"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "subsets-ii",
+      "problemNumber": 90,
+      "title": "Subsets II",
+      "url": "https://leetcode.com/problems/subsets-ii/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Backtracking"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "interleaving-string",
+      "problemNumber": 97,
+      "title": "Interleaving String",
+      "url": "https://leetcode.com/problems/interleaving-string/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "2-D Dynamic Programming"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "validate-binary-search-tree",
+      "problemNumber": 98,
+      "title": "Validate Binary Search Tree",
+      "url": "https://leetcode.com/problems/validate-binary-search-tree/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Trees"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "same-tree",
+      "problemNumber": 100,
+      "title": "Same Tree",
+      "url": "https://leetcode.com/problems/same-tree/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Trees"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "binary-tree-level-order-traversal",
+      "problemNumber": 102,
+      "title": "Binary Tree Level Order Traversal",
+      "url": "https://leetcode.com/problems/binary-tree-level-order-traversal/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Trees"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "maximum-depth-of-binary-tree",
+      "problemNumber": 104,
+      "title": "Maximum Depth of Binary Tree",
+      "url": "https://leetcode.com/problems/maximum-depth-of-binary-tree/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Trees"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "balanced-binary-tree",
+      "problemNumber": 110,
+      "title": "Balanced Binary Tree",
+      "url": "https://leetcode.com/problems/balanced-binary-tree/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Trees"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "distinct-subsequences",
+      "problemNumber": 115,
+      "title": "Distinct Subsequences",
+      "url": "https://leetcode.com/problems/distinct-subsequences/",
+      "difficulty": "hard",
+      "topics": [
+        "NeetCode 150",
+        "2-D Dynamic Programming"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "palindrome-partitioning",
+      "problemNumber": 131,
+      "title": "Palindrome Partitioning",
+      "url": "https://leetcode.com/problems/palindrome-partitioning/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Backtracking"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "clone-graph",
+      "problemNumber": 133,
+      "title": "Clone Graph",
+      "url": "https://leetcode.com/problems/clone-graph/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Graphs"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "single-number",
+      "problemNumber": 136,
+      "title": "Single Number",
+      "url": "https://leetcode.com/problems/single-number/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Bit Manipulation"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "linked-list-cycle",
+      "problemNumber": 141,
+      "title": "Linked List Cycle",
+      "url": "https://leetcode.com/problems/linked-list-cycle/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Linked List"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "evaluate-reverse-polish-notation",
+      "problemNumber": 150,
+      "title": "Evaluate Reverse Polish Notation",
+      "url": "https://leetcode.com/problems/evaluate-reverse-polish-notation/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Stack"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "min-stack",
+      "problemNumber": 155,
+      "title": "Min Stack",
+      "url": "https://leetcode.com/problems/min-stack/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Stack"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "reverse-bits",
+      "problemNumber": 190,
+      "title": "Reverse Bits",
+      "url": "https://leetcode.com/problems/reverse-bits/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Bit Manipulation"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "number-of-1-bits",
+      "problemNumber": 191,
+      "title": "Number of 1 Bits",
+      "url": "https://leetcode.com/problems/number-of-1-bits/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Bit Manipulation"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "contains-duplicate",
+      "problemNumber": 217,
+      "title": "Contains Duplicate",
+      "url": "https://leetcode.com/problems/contains-duplicate/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Arrays & Hashing"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "invert-binary-tree",
+      "problemNumber": 226,
+      "title": "Invert Binary Tree",
+      "url": "https://leetcode.com/problems/invert-binary-tree/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Trees"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "lowest-common-ancestor-of-a-binary-search-tree",
+      "problemNumber": 235,
+      "title": "Lowest Common Ancestor of a Binary Search Tree",
+      "url": "https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-search-tree/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Trees"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "product-of-array-except-self",
+      "problemNumber": 238,
+      "title": "Product of Array Except Self",
+      "url": "https://leetcode.com/problems/product-of-array-except-self/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Arrays & Hashing"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "valid-anagram",
+      "problemNumber": 242,
+      "title": "Valid Anagram",
+      "url": "https://leetcode.com/problems/valid-anagram/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Arrays & Hashing"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "missing-number",
+      "problemNumber": 268,
+      "title": "Missing Number",
+      "url": "https://leetcode.com/problems/missing-number/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Bit Manipulation"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "burst-balloons",
+      "problemNumber": 312,
+      "title": "Burst Balloons",
+      "url": "https://leetcode.com/problems/burst-balloons/",
+      "difficulty": "hard",
+      "topics": [
+        "NeetCode 150",
+        "2-D Dynamic Programming"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "reconstruct-itinerary",
+      "problemNumber": 332,
+      "title": "Reconstruct Itinerary",
+      "url": "https://leetcode.com/problems/reconstruct-itinerary/",
+      "difficulty": "hard",
+      "topics": [
+        "NeetCode 150",
+        "Advanced Graphs"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "counting-bits",
+      "problemNumber": 338,
+      "title": "Counting Bits",
+      "url": "https://leetcode.com/problems/counting-bits/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Bit Manipulation"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "design-twitter",
+      "problemNumber": 355,
+      "title": "Design Twitter",
+      "url": "https://leetcode.com/problems/design-twitter/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Heap / Priority Queue"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "sum-of-two-integers",
+      "problemNumber": 371,
+      "title": "Sum of Two Integers",
+      "url": "https://leetcode.com/problems/sum-of-two-integers/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Bit Manipulation"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "longest-repeating-character-replacement",
+      "problemNumber": 424,
+      "title": "Longest Repeating Character Replacement",
+      "url": "https://leetcode.com/problems/longest-repeating-character-replacement/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Sliding Window"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "target-sum",
+      "problemNumber": 494,
+      "title": "Target Sum",
+      "url": "https://leetcode.com/problems/target-sum/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "2-D Dynamic Programming"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "subtree-of-another-tree",
+      "problemNumber": 572,
+      "title": "Subtree of Another Tree",
+      "url": "https://leetcode.com/problems/subtree-of-another-tree/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Trees"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "palindromic-substrings",
+      "problemNumber": 647,
+      "title": "Palindromic Substrings",
+      "url": "https://leetcode.com/problems/palindromic-substrings/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "1-D Dynamic Programming"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "redundant-connection",
+      "problemNumber": 684,
+      "title": "Redundant Connection",
+      "url": "https://leetcode.com/problems/redundant-connection/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Graphs"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "kth-largest-element-in-a-stream",
+      "problemNumber": 703,
+      "title": "Kth Largest Element In a Stream",
+      "url": "https://leetcode.com/problems/kth-largest-element-in-a-stream/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Heap / Priority Queue"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "binary-search",
+      "problemNumber": 704,
+      "title": "Binary Search",
+      "url": "https://leetcode.com/problems/binary-search/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Binary Search"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "network-delay-time",
+      "problemNumber": 743,
+      "title": "Network Delay Time",
+      "url": "https://leetcode.com/problems/network-delay-time/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Advanced Graphs"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "min-cost-climbing-stairs",
+      "problemNumber": 746,
+      "title": "Min Cost Climbing Stairs",
+      "url": "https://leetcode.com/problems/min-cost-climbing-stairs/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "1-D Dynamic Programming"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "partition-labels",
+      "problemNumber": 763,
+      "title": "Partition Labels",
+      "url": "https://leetcode.com/problems/partition-labels/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Greedy"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "swim-in-rising-water",
+      "problemNumber": 778,
+      "title": "Swim In Rising Water",
+      "url": "https://leetcode.com/problems/swim-in-rising-water/",
+      "difficulty": "hard",
+      "topics": [
+        "NeetCode 150",
+        "Advanced Graphs"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "hand-of-straights",
+      "problemNumber": 846,
+      "title": "Hand of Straights",
+      "url": "https://leetcode.com/problems/hand-of-straights/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Greedy"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "car-fleet",
+      "problemNumber": 853,
+      "title": "Car Fleet",
+      "url": "https://leetcode.com/problems/car-fleet/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Stack"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "k-closest-points-to-origin",
+      "problemNumber": 973,
+      "title": "K Closest Points to Origin",
+      "url": "https://leetcode.com/problems/k-closest-points-to-origin/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Heap / Priority Queue"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "last-stone-weight",
+      "problemNumber": 1046,
+      "title": "Last Stone Weight",
+      "url": "https://leetcode.com/problems/last-stone-weight/",
+      "difficulty": "easy",
+      "topics": [
+        "NeetCode 150",
+        "Heap / Priority Queue"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "count-good-nodes-in-binary-tree",
+      "problemNumber": 1448,
+      "title": "Count Good Nodes In Binary Tree",
+      "url": "https://leetcode.com/problems/count-good-nodes-in-binary-tree/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Trees"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "minimum-interval-to-include-each-query",
+      "problemNumber": 1851,
+      "title": "Minimum Interval to Include Each Query",
+      "url": "https://leetcode.com/problems/minimum-interval-to-include-each-query/",
+      "difficulty": "hard",
+      "topics": [
+        "NeetCode 150",
+        "Intervals"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "merge-triplets-to-form-target-triplet",
+      "problemNumber": 1899,
+      "title": "Merge Triplets to Form Target Triplet",
+      "url": "https://leetcode.com/problems/merge-triplets-to-form-target-triplet/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Greedy"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "detect-squares",
+      "problemNumber": 2013,
+      "title": "Detect Squares",
+      "url": "https://leetcode.com/problems/detect-squares/",
+      "difficulty": "medium",
+      "topics": [
+        "NeetCode 150",
+        "Math & Geometry"
+      ],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
       "active": true
     }
   ]
