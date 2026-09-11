@@ -25,6 +25,10 @@ Research informed the direction rather than supplying a copied product skin:
   a small set of primary destinations with additional navigation available.
 
 Acceptance covers 375–440px phones, readable code with horizontal scrolling
-and optional wrapping, sheet dismissal and focus return, 580px results panes,
-and resizing through intermediate desktop widths. Browser emulation does not
+and optional wrapping, sheet dismissal and focus return, normal phone document
+scrolling, an explicit Reviews selection cart, full-screen Engineering navigation,
+and resizing through intermediate desktop widths. The 580px results minimum is
+desktop-only. `scripts/check-phone-flow.mjs` exercises populated selections,
+failed queued saves and recovery, role-context response failures, and the phone
+layout with synthetic local responses in Chromium and WebKit. Browser emulation does not
 replace physical iPhone keyboard and safe-area acceptance.

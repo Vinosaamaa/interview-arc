@@ -1,5 +1,5 @@
 /* Approved phone composition. Desktop/tablet retain the existing visual system. */
-.phone-navigation, .phone-row-actions, .phone-page-heading, .phone-review-open, .phone-tool { display: none; }
+.phone-navigation, .phone-row-actions, .phone-page-heading, .phone-review-open, .phone-tool, .phone-review-cart, .phone-loop-disclosure { display: none; }
 .tablet-navigation, .desktop-row-actions { display: contents; }
 .phone-sheet { display: none; }
 .hero-bank-totals .phone-bank-label { display: none; }
@@ -32,7 +32,7 @@
   }
   .app-shell .page-content,
   .app-shell .page-content:has(> .review-queue-workspace, > .banks-page.bounded-list) {
-    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+    padding-bottom: calc(var(--phone-dock-height) + 12px);
   }
   .app-shell :is(.review-filter-rail, .primary-bank-controls, .journey-controls) {
     display: flex;
@@ -191,12 +191,13 @@
   .code-stage-backdrop { padding: 0; top: var(--mobile-reader-top, 0px); bottom: auto; height: var(--mobile-reader-height, 100dvh); grid-template-rows: minmax(0, 1fr); }
   .code-stage-dialog { height: 100%; width: 100%; min-height: 0; overflow: hidden; }
   .code-stage-dialog .code-stage { border-radius: 0; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
-  .app-shell { --phone-paper: #fbfcfa; --phone-ink: #102a2a; --phone-muted: #617470; --phone-line: #dce5e1; --phone-teal: #0f5f5a; background: var(--phone-paper); }
+  .app-shell { --phone-paper: #fbfcfa; --phone-ink: #102a2a; --phone-muted: #617470; --phone-line: #dce5e1; --phone-teal: #0f5f5a; --phone-safe-bottom: env(safe-area-inset-bottom, 0px); --phone-dock-height: calc(53px + max(4px, var(--phone-safe-bottom))); background: var(--phone-paper); }
+  .atmosphere-field.quiet { display: none; }
   .app-shell .tablet-navigation, .app-shell .desktop-row-actions { display: none; }
   .app-shell .phone-tool { display: flex; }
   .app-shell .learn-animal-sketch, .app-shell .learn-hero-light-band { display: none; }
-  .app-shell .page-content { padding: 0 16px calc(90px + env(safe-area-inset-bottom)); background: var(--phone-paper); }
-  .app-shell .page-content:has(> .review-queue-workspace, > .banks-page.bounded-list) { padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
+  .app-shell .page-content { padding: 0 16px calc(var(--phone-dock-height) + 12px); background: var(--phone-paper); }
+  .app-shell .page-content:has(> .review-queue-workspace, > .banks-page.bounded-list) { padding-bottom: calc(var(--phone-dock-height) + 12px); }
   .app-shell .topbar {
     grid-template-areas: "context switch actions";
     grid-template-rows: 44px; position: sticky; top: 0; z-index: 70; height: 58px; min-height: 58px; padding: 6px 10px; background: var(--phone-paper); border-bottom: 1px solid var(--phone-line); box-shadow: none; grid-template-columns: 32px minmax(0, 1fr) 36px; gap: 6px; }
@@ -207,8 +208,8 @@
   .app-shell .topbar-tools > summary { border: 0; background: transparent; }
   .app-shell .topbar-brand { height: 44px; width: 32px; }
   .app-shell .topbar-brand .brand-mark { width: 29px; height: 29px; }
-  .app-shell .phone-navigation { display: flex; position: fixed; z-index: 70; inset: auto 0 0; padding: 5px 8px calc(7px + env(safe-area-inset-bottom)); min-height: 66px; gap: 2px; background: var(--phone-paper); border-top: 1px solid var(--phone-line); }
-  .phone-navigation button { flex: 1; min-width: 0; min-height: 51px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 0; border-radius: 8px; padding: 5px 1px; font-size: 12px; font-weight: 650; line-height: 1.3; white-space: nowrap; color: var(--phone-muted); background: transparent; }
+  .app-shell .phone-navigation { display: flex; position: fixed; z-index: 70; inset: auto 0 0; height: var(--phone-dock-height); padding: 4px 8px max(4px, var(--phone-safe-bottom)); min-height: 0; gap: 2px; background: var(--phone-paper); border-top: 1px solid var(--phone-line); }
+  .phone-navigation button { flex: 1; min-width: 0; min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 0; border-radius: 8px; padding: 4px 1px; font-size: 12px; font-weight: 650; line-height: 1.3; white-space: nowrap; color: var(--phone-muted); background: transparent; }
   .phone-navigation button[aria-current="page"] { background: #e5efea; color: var(--phone-teal); }
   :is(.phone-navigation, .phone-more-destinations, .phone-row-more) svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
   .app-shell:has(.reader-workspace) .phone-navigation { visibility: hidden; pointer-events: none; }
@@ -227,7 +228,7 @@
   .app-shell .interview-page-hero.tone-banks .page-hero-summary { padding: 0; border: 0; }
   .app-shell .hero-bank-totals { gap: 6px; }
   .app-shell .hero-bank-totals > button { border: 1px solid var(--phone-line); border-radius: 8px; padding: 8px; min-height: 54px; background: #f1f5f2; }
-  .app-shell .hero-bank-totals > button > span { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app-shell .hero-bank-totals > button > span { font-size: 11px; white-space: normal; overflow: visible; text-overflow: clip; }
   .app-shell .hero-bank-totals > button > strong { font-size: 16px; }
   .app-shell .hero-bank-totals > button > span:not(.phone-bank-label) { display: none; }
   .app-shell .hero-bank-totals > button > .phone-bank-label { display: block; }
@@ -235,7 +236,7 @@
   .app-shell :is(.engineering-hero-copy, .learn-hero-copy) { position: static; padding: 0; width: 100%; }
   .app-shell :is(.engineering-hero-copy, .learn-hero-copy) h1 { font-size: 30px; line-height: 1.2; max-width: none; margin: 8px 0 12px; }
   .app-shell :is(.engineering-hero-quote, .engineering-hero-lede, .learn-hero-quote, .learn-hero-lede, .learn-hero-art, .engineering-hero-light-band) { display: none; }
-  .app-shell :is(.engineering-hero-metrics, .learn-hero-metrics) { position: static; height: auto; padding: 12px 0; border: 0; }
+  .app-shell :is(.engineering-hero-metrics, .learn-hero-metrics) { position: static; height: auto; min-height: 0; max-height: none; overflow: visible; padding: 12px 0; border: 0; }
 
   /* One search row, one horizontally scrolling filter row, one results surface. */
   .app-shell :is(.review-queue-controls, .review-queue-container, .review-queue-page, .review-queue-sheet, .bank-master-pane, .problem-bank-list, .library-toolbar, .bank-toolbar, .reader-master-scroll, .past-log-shell) { border-radius: 0; box-shadow: none; background: transparent; }
@@ -268,7 +269,7 @@
   .app-shell .review-row-meta .review-outcome-chip { min-width: 0; padding: 0; background: transparent; border: 0; font-size: 11px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .app-shell .review-icon-actions { grid-column: 3; grid-row: 1 / 3; align-self: center; gap: 4px; }
   .app-shell .review-icon-actions > .phone-row-actions { display: flex; }
-  .app-shell .review-selection-folio { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto; min-height: 0; height: auto; padding: 12px; gap: 10px; border: 1px solid var(--phone-line); border-radius: 10px; background: #e9f2ec; margin: 12px 0 0; }
+  .app-shell .review-selection-folio { display: none; }
   .app-shell .review-selection-folio :is(.folio-arrow, .folio-empty) { display: none; }
   .app-shell .review-selection-folio .folio-summary { grid-column: 1; grid-row: 1; }
   .app-shell .review-selection-folio .folio-summary strong { font-size: 12px; }
@@ -346,8 +347,65 @@
   .app-shell .engineering-reader-header h1 { font-size: 29px; line-height: 1.2; }
   .app-shell .engineering-reader-header > p { font-size: 17px; line-height: 1.7; }
   .app-shell .engineering-reader-body { padding: 20px 18px; }
-  .app-shell .engineering-contents-nav { position: sticky; top: 0; z-index: 4; border-radius: 0; background: var(--phone-paper); }
+  .app-shell .engineering-contents-nav { position: sticky; top: 58px; z-index: 4; border-radius: 0; background: var(--phone-paper); }
   .app-shell .engineering-contents-nav button { min-height: 44px; font-size: 12px; }
+
+  /* Phone destinations are documents; bounded tracks belong to larger screens. */
+  .app-shell .review-queue-page,
+  .app-shell .banks-page.bounded-list,
+  .app-shell .banks-page.bounded-list .bank-master-detail,
+  .app-shell .banks-page.bounded-list .bank-master-pane { display: block; height: auto; min-height: 0; }
+  .app-shell .review-queue-sheet,
+  .app-shell .banks-page.bounded-list .problem-bank-list { height: auto; min-height: 0; max-height: none; contain: none; overflow: visible; }
+  .app-shell .banks-page.bounded-list .bank-master-detail { margin-top: 16px; }
+  .app-shell .review-queue-controls { display: flex; flex-direction: column; align-items: stretch; }
+  .app-shell .review-search-bar { width: 100%; min-width: 0; }
+  .app-shell .phone-review-cart { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px; border: 1px solid #cdbb7a; border-radius: 8px; background: #fff3c4; color: #624900; font-size: 14px; text-align: left; }
+  .phone-review-cart > svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .phone-review-cart > span:first-of-type { flex: 1; }
+  .app-shell .reader-chrome .master-pane-toggle { display: none; }
+
+  .app-shell.active-workspace-engineering .engineering-destination .engineering-workspace { display: block; height: auto; min-height: 0; overflow: visible; }
+  .app-shell .engineering-destination .engineering-record-panel { height: auto; min-height: 0; overflow: visible; }
+  .app-shell .engineering-destination :is(.engineering-statistics, .engineering-stat-panel, .engineering-stat-receipts, .engineering-chronology) { height: auto; min-height: 0; max-height: none; overflow: visible; }
+  .app-shell .engineering-reader-header, .app-shell .engineering-reader-body { padding-inline: 0; }
+  .phone-engineering-panel :is(.engineering-index-panel, .engineering-evidence-panel) { position: static; inset: auto; width: 100%; height: auto; max-height: none; overflow: visible; border: 0; border-radius: 0; box-shadow: none; transform: none; }
+  .phone-engineering-panel :is(.engineering-record-list, .engineering-receipt-list) { height: auto; max-height: none; overflow: visible; }
+  .phone-engineering-panel .engineering-panel-close { display: none; }
+  .phone-engineering-panel .engineering-evidence-panel { padding-inline: 0; }
+  .phone-engineering-panel .engineering-evidence-panel > header { position: static; margin-inline: 0; padding-inline: 0; }
+
+  .app-shell .loops-workspace::before,
+  .app-shell :is(.loop-identity-switcher, .loop-support-band)::after { display: none; }
+  .app-shell :is(.loop-identity-switcher, .loop-support-band, .loop-stage-chronology, .loop-workspace-actions) { width: 100%; margin-left: 0; }
+  .app-shell .loop-support-band { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  .app-shell .loop-support-band :is(.loop-role-brief, .loop-preparation) { border: 0; border-bottom: 1px solid #dccbd0; border-radius: 0; background: transparent; box-shadow: none; }
+  .app-shell .loop-support-band :is(.loop-role-brief, .loop-preparation) > header { display: flex; padding: 12px 0; align-items: center; gap: 8px; }
+  .app-shell .loop-support-band :is(.loop-role-brief, .loop-preparation) > header::before,
+  .app-shell .loop-role-brief > header > small,
+  .app-shell .loop-desktop-heading { display: none; }
+  .app-shell .loop-support-band :is(.loop-role-brief, .loop-preparation) > header > div:first-child { flex: 1; }
+  .phone-loop-disclosure { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 0; border: 0; background: transparent; color: #733749; font: inherit; text-align: left; }
+  .app-shell .loop-support-band :is(.loop-role-summary, .loop-role-brief > ul, .loop-jd-access, .loop-preparation-columns) { padding-inline: 0; }
+  .app-shell .loop-support-band .loop-role-brief > ul { display: grid; }
+  .app-shell .loop-support-band .loop-role-brief > ul li { border: 0; border-radius: 0; background: transparent; padding-inline: 0; }
+  .app-shell :is(.loop-preparation-column, .loop-preparation-question) { border-radius: 0; box-shadow: none; }
+  .app-shell .loop-preparation-list { height: auto; min-height: 0; max-height: none; overflow: visible; padding: 0; }
+  .app-shell .loop-preparation-list > p { min-height: 0; padding: 12px 0; text-align: left; display: block; }
+  .app-shell .loop-support-band .phone-collapsed > :not(header),
+  .app-shell .loop-support-band .phone-collapsed > header p { display: none; }
+
+  .app-shell :is(.materials-revision, .materials-revision-rail, .materials-import-register, .materials-cover-letters, .materials-library-empty, .materials-detail-state, .materials-library-state, .chart-sheet, .journey-pulse, .loop-journey-facts) { border-inline: 0; border-radius: 0; box-shadow: none; }
+  .app-shell :is(.materials-library-empty, .materials-detail-state, .materials-library-state, .materials-cover-letter-empty) { min-height: 0; padding: 20px 0; }
+  .app-shell :is(.materials-revision-heading, .materials-bullets, .materials-delta, .materials-origin, .materials-review-impact, .materials-retention, .materials-cover-letters > header, .materials-import-register > header, .chart-sheet, .loop-journey-facts > header) { padding-inline: 0; }
+  .app-shell .materials-revision-rail > section > ol { display: block; overflow: visible; }
+  .app-shell .materials-revision-rail li { min-width: 0; }
+  .app-shell .journey-pulse { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app-shell .journey-pulse article { min-height: 0; padding: 12px 8px; }
+  .app-shell .journey-page .stat-ledger { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  .app-shell .journey-page .stat-block { min-height: 0; padding: 14px 8px; border: 0; border-bottom: 1px solid var(--phone-line); border-radius: 0; background: transparent; box-shadow: none; }
+  .app-shell .journey-page .stat-block strong { font-size: 26px; line-height: 1.2; }
+  .app-shell .journey-page .stat-block::before, .app-shell .journey-page .stat-block::after { display: none; }
 
 }
 @media all {
@@ -357,6 +415,18 @@
   .phone-sheet.closing { animation: phone-sheet-out 200ms ease both; }
   .phone-sheet.closing::backdrop { animation: phone-shade-out 200ms ease both; }
   .phone-sheet-content { padding: 20px 20px calc(24px + env(safe-area-inset-bottom)); }
+  .phone-sheet-fullscreen[open] { inset: 0; width: 100%; max-width: none; height: 100dvh; max-height: none; border-radius: 0; overflow: hidden; }
+  .phone-sheet-fullscreen .phone-sheet-content { display: flex; flex-direction: column; height: 100%; padding: max(12px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom)); }
+  .phone-sheet-fullscreen .phone-sheet-content > header { flex: 0 0 auto; margin-bottom: 12px; }
+  .phone-sheet-body { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+  .phone-review-selection > p { margin-block: 8px 16px; font-size: 14px; line-height: 1.6; }
+  .phone-review-selection ul { list-style: none; padding: 0; margin: 0 0 20px; }
+  .phone-review-selection li { display: flex; align-items: center; gap: 12px; padding: 16px 0; border-bottom: 1px solid #dce5e1; }
+  .phone-review-selection li > div { min-width: 0; flex: 1; display: grid; gap: 5px; }
+  .phone-review-selection strong { font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
+  .phone-review-selection small { font-size: 13px; color: #617470; }
+  .phone-review-selection li button { min-height: 44px; padding: 8px 12px; border: 1px solid #bfd0c6; border-radius: 8px; background: transparent; color: #0f5f5a; }
+  .phone-review-selection > .folio-add { width: 100%; }
   .phone-sheet-content > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
   .phone-sheet-content > header h2 { font-size: 21px; line-height: 1.35; margin: 4px 0 0; min-width: 0; overflow-wrap: anywhere; }
   .phone-sheet-close { min-height: 44px; padding: 0 14px; border: 1px solid #bfd0c6; border-radius: 8px; background: #e5eee9; color: #0f5f5a; font-size: 13px; font-weight: 650; flex-shrink: 0; }

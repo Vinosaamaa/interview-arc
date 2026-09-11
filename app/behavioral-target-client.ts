@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { subscribeToLiveUpdates } from "./live-event-policy";
+import { readBehavioralTargetResponse } from "./behavioral-target-response";
 import {
   behavioralTargetProfileListSchema,
   type DisplaySafeBehavioralTargetRevision,
@@ -10,9 +11,7 @@ import {
 
 export async function behavioralTargetRequest(path: string, init?: RequestInit) {
   const response = await fetch(path, { cache: "no-store", ...init });
-  const payload = await response.json() as { error?: string };
-  if (!response.ok) throw new Error(payload.error ?? "Target Profile request failed.");
-  return payload;
+  return readBehavioralTargetResponse(response);
 }
 
 export function useBehavioralTargetProfiles(enabled = true) {

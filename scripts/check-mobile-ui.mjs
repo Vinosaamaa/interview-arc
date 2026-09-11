@@ -47,9 +47,9 @@ try {
     assert.ok(chrome.every(r => Math.abs(r.middle - chrome[0].middle) <= 1), "Top bar must stay on one row");
     assert.ok(chrome[0].right <= chrome[1].left && chrome[1].right <= chrome[2].left, "Top-bar controls overlap");
     assert.ok(sizes.every(s => s.height >= 44 && s.font >= 12 && s.scroll <= s.width + 1), `${query}: navigation target or label clipped`);
-    if (view === "reviews") assert.ok((await box(page.locator(".review-queue-sheet"))).height >= 580);
+    if (view === "reviews") assert.ok(await page.locator(".review-queue-sheet").evaluate(e => getComputedStyle(e).minHeight === "0px" && getComputedStyle(e).overflowY === "visible"), "Reviews uses document scrolling");
     if (view === "banks") {
-      assert.ok((await box(page.locator(".problem-bank-list"))).height >= 580);
+      assert.ok(await page.locator(".problem-bank-list").evaluate(e => getComputedStyle(e).contain === "none" && getComputedStyle(e).overflowY === "visible"), "Banks uses document scrolling");
       const labels = await page.locator(".hero-bank-totals > button > span:visible").evaluateAll(es => es.map(e => ({ width: e.clientWidth, scroll: e.scrollWidth })));
       assert.ok(labels.every(e => e.scroll <= e.width + 1), "Bank total labels clipped");
     }
@@ -150,8 +150,7 @@ try {
   }), "Review action title is rotated or oversized");
   assert.equal(await page.locator(".phone-sheet[open]").evaluate(e => e.parentElement === document.body), true);
   await page.locator(".phone-sheet-close").click();
-  const selectionHeight = (await box(page.locator(".review-selection-folio"))).height;
-  assert.ok(selectionHeight < 120, "Review selection footer keeps empty desktop rows");
+  assert.equal(await page.locator(".review-selection-folio").isVisible(), false, "Phone selection lives in its full-screen cart");
 
   await visit("view=today");
   await page.getByRole("button", { name: /Add another session/ }).click();

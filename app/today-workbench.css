@@ -38,6 +38,8 @@
 .today-activity-details { display: flex; flex-direction: column; gap: 12px; }
 .today-activity-details p { margin: 0; font-size: 15px; line-height: 1.6; }
 .today-activity-details .activity-timer { width: 100%; }
+.today-activity-details .result-flag-wrap { width: 100%; min-width: 0; justify-self: stretch; }
+.today-activity-details .result-flag .ui-icon { flex: 0 0 20px; }
 .today-activity-details > button, .today-activity-details .result-flag { display: flex; align-items: center; gap: 12px; width: 100%; height: auto; min-height: 44px; padding: 10px 12px; border-radius: 8px; }
 .today-activity-details > button::after, .today-activity-details .result-flag::after { content: attr(aria-label); font-size: 13px; text-align: left; }
 .today-activity-details .result-legend { display: none; }

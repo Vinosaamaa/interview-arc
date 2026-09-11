@@ -58,6 +58,7 @@ try {
     assert.ok(Math.abs(g.x) <= 1 && Math.abs(g.y) <= 1 && Math.abs(g.width - width) <= 1 && Math.abs(g.height - height) <= 1, JSON.stringify(g));
     assert.equal(await page.locator(".topbar").isVisible(), false);
     assert.equal(await page.locator(".mobile-interview-nav").isVisible(), false);
+    assert.equal(await page.locator(".reader-chrome .master-pane-toggle").isVisible(), false, "Phone reader omits the desktop master-list toggle");
     // Code may use the prose gutter, but nothing may extend beyond the screen.
     const overflow = await page.locator(".workspace-reader-scroll .reader-group,.workspace-reader-scroll .markdown-body,.workspace-reader-scroll .code-stage").evaluateAll(es => es.filter(e => e.getBoundingClientRect().left < -1 || e.getBoundingClientRect().left + e.scrollWidth > innerWidth + 1).map(e => e.className));
     assert.deepEqual(overflow, [], "Prose must not overflow or be clipped");

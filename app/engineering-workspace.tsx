@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ComponentType, CSSProperties } from "react";
+import type { ComponentType, CSSProperties, ReactNode, RefObject } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -16,6 +16,16 @@ import type {
 
 import HeroQuote from "./hero-quote";
 import WorkspaceHeroMetrics from "./workspace-hero-metrics";
+import MobileSheet from "./mobile-sheet";
+
+function PhoneEngineeringPanel({ phone, open, title, view, onClose, children, scrollMemory }: {
+  phone: boolean; open: boolean; title: string; view: EngineeringView; onClose: () => void; children: ReactNode; scrollMemory?: RefObject<number>;
+}) {
+  if (!phone) return children;
+  return <MobileSheet title={title} open={open} onClose={onClose} fullScreen closeLabel={`Close ${title.toLowerCase()}`} bodyScrollMemoryRef={scrollMemory}>
+    <div className={`engineering-destination engineering-destination-${view} phone-engineering-panel`}>{children}</div>
+  </MobileSheet>;
+}
 
 export type EngineeringView = "journal" | "capabilities" | "decisions" | "incidents" | "case-studies" | "statistics";
 
@@ -283,6 +293,11 @@ function RecordReader({
     const target = reader?.querySelector<HTMLElement>(`[data-engineering-section="${section}"]`);
     if (!reader || !target) return;
     const toolbarHeight = reader.querySelector<HTMLElement>(".engineering-contents-nav")?.getBoundingClientRect().height ?? 0;
+    if (window.matchMedia("(max-width: 600px)").matches) {
+      const top = (section === "overview" ? reader : target).getBoundingClientRect().top + window.scrollY - toolbarHeight - 58;
+      window.scrollTo({ top: Math.max(0, top), behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+      return;
+    }
     const top = section === "overview" ? 0 : target.getBoundingClientRect().top - reader.getBoundingClientRect().top + reader.scrollTop - reader.clientTop - toolbarHeight;
     reader.scrollTo({ top: Math.max(0, top), behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
   };
@@ -509,6 +524,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const [selectedRef, setSelectedRef] = useState(index.records[0]?.ref ?? "");
   const [mobileReaderOpen, setMobileReaderOpen] = useState(true);
   const [narrowWorkbench, setNarrowWorkbench] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 1600px)").matches);
+  const [phone, setPhone] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(true);
   const [contentsSection, setContentsSection] = useState<EngineeringContentsSection>("overview");
   const [memoryReady, setMemoryReady] = useState(false);
@@ -551,6 +567,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       setSelectedReceiptRepositories(memory.receiptRepositories ?? []);
       if (index.records.some((record) => record.ref === memory.selectedRef)) setSelectedRef(memory.selectedRef!);
       const narrowReader = window.matchMedia("(max-width: 1600px)").matches;
+      setPhone(window.matchMedia("(max-width: 600px)").matches);
       setMobileReaderOpen(rememberedLayer === "receipts" ? false : narrowReader ? true : memory.mobileReaderOpen ?? false);
       const narrow = window.matchMedia("(max-width: 1600px)").matches;
       setNarrowWorkbench(narrow);
@@ -564,6 +581,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 1600px)");
+    const phoneMedia = window.matchMedia("(max-width: 600px)");
     const syncEvidenceLayout = () => {
       setNarrowWorkbench(media.matches);
       if (media.matches) {
@@ -572,11 +590,13 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       }
     };
     media.addEventListener("change", syncEvidenceLayout);
-    return () => media.removeEventListener("change", syncEvidenceLayout);
+    const syncPhone = () => setPhone(phoneMedia.matches);
+    phoneMedia.addEventListener("change", syncPhone);
+    return () => { media.removeEventListener("change", syncEvidenceLayout); phoneMedia.removeEventListener("change", syncPhone); };
   }, [journalLayer, view]);
 
   useEffect(() => {
-    if (!narrowWorkbench || view === "statistics" || (mobileReaderOpen && !evidenceOpen)) return;
+    if (phone || !narrowWorkbench || view === "statistics" || (mobileReaderOpen && !evidenceOpen)) return;
     const dismissOutside = (event: PointerEvent) => {
       const target = event.target;
       if (!(target instanceof Element) || target.closest('.engineering-index-panel, .engineering-evidence-panel, .engineering-reader-panel-actions, [aria-controls="engineering-index"]')) return;
@@ -585,7 +605,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     };
     document.addEventListener("pointerdown", dismissOutside, true);
     return () => document.removeEventListener("pointerdown", dismissOutside, true);
-  }, [evidenceOpen, mobileReaderOpen, narrowWorkbench, view]);
+  }, [evidenceOpen, mobileReaderOpen, narrowWorkbench, phone, view]);
 
   useLayoutEffect(() => {
     if (!memoryReady || !recordListRef.current) return;
@@ -619,20 +639,20 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     }, 160);
   };
 
-  const closeIndex = () => {
+  const closeIndex = useCallback(() => {
     setMobileReaderOpen(true);
     requestAnimationFrame(() => workbenchRef.current?.querySelector<HTMLButtonElement>('[aria-controls="engineering-index"]')?.focus({ preventScroll: true }));
-  };
+  }, []);
   const toggleIndex = () => {
     if (!mobileReaderOpen) { closeIndex(); return; }
     setMobileReaderOpen(false);
     setEvidenceOpen(false);
     requestAnimationFrame(() => workbenchRef.current?.querySelector<HTMLButtonElement>('.engineering-index-close')?.focus({ preventScroll: true }));
   };
-  const closeEvidence = () => {
+  const closeEvidence = useCallback(() => {
     setEvidenceOpen(false);
     requestAnimationFrame(() => workbenchRef.current?.querySelector<HTMLButtonElement>('.engineering-reader-panel-actions button:last-child')?.focus({ preventScroll: true }));
-  };
+  }, []);
   const toggleEvidence = () => {
     setMobileReaderOpen(true);
     setEvidenceOpen((open) => !open);
@@ -666,6 +686,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     if (!mobileReaderOpen) { event.preventDefault(); closeIndex(); }
     else if (evidenceOpen) { event.preventDefault(); closeEvidence(); }
   }}>
+    <PhoneEngineeringPanel phone={phone} open={!mobileReaderOpen} title="Index" view={view} onClose={closeIndex} scrollMemory={indexScrollTopRef}>
     <aside id="engineering-index" inert={narrowWorkbench && mobileReaderOpen} aria-hidden={narrowWorkbench && mobileReaderOpen} className="engineering-index-panel engineering-records" aria-label={`${ENGINEERING_VIEW_TITLES[view]} ${showReceipts ? "pull-request receipts" : "rich records"}`}>
       <header><div><h1>{ENGINEERING_VIEW_TITLES[view]}</h1><p>{showReceipts ? `${receipts.length} of ${index.receiptStatistics.totalReceipts} pull-request receipts` : `${records.length} factual ${records.length === 1 ? "record" : "records"}`}</p></div><button type="button" className="engineering-panel-close engineering-index-close" onClick={closeIndex} aria-label="Close index">Close</button></header>
       {view === "journal" ? <div className="engineering-journal-layers" role="group" aria-label="Journal evidence layer">
@@ -709,7 +730,10 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
         {records.length === 0 ? <EmptyEngineeringView view={view} /> : null}
       </div>}
     </aside>
+    </PhoneEngineeringPanel>
     {selected ? <RecordReader record={selected} onToggleIndex={toggleIndex} indexOpen={!mobileReaderOpen} onToggleEvidence={toggleEvidence} evidenceOpen={evidenceOpen} contentsSection={contentsSection} onContentsSectionChange={setContentsSection} /> : <div className="engineering-reader engineering-record-panel engineering-reader-empty"><button type="button" className="engineering-panel-toggle" onClick={toggleIndex} aria-expanded={!mobileReaderOpen} aria-controls="engineering-index">Open index</button><EmptyEngineeringView view={view} /></div>}
-    {selected ? <EngineeringEvidencePanel record={selected} index={index} onSelect={openRelation} onClose={closeEvidence} hidden={!displayEvidence} /> : <EngineeringEmptyEvidencePanel view={view} onClose={closeEvidence} hidden={!displayEvidence} />}
+    <PhoneEngineeringPanel phone={phone} open={displayEvidence} title="Evidence" view={view} onClose={closeEvidence}>
+      {selected ? <EngineeringEvidencePanel record={selected} index={index} onSelect={openRelation} onClose={closeEvidence} hidden={!displayEvidence} /> : <EngineeringEmptyEvidencePanel view={view} onClose={closeEvidence} hidden={!displayEvidence} />}
+    </PhoneEngineeringPanel>
   </section></div>;
 }

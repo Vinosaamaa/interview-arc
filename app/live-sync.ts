@@ -251,6 +251,7 @@ export type LiveStateController = {
   setNow: (value: number) => void;
   hydrated: boolean;
   synced: boolean;
+  queuedReviewKeys: string[];
   mutationError: { type: Mutation["type"]; message: string; code?: string } | null;
   clearMutationError: () => void;
   enqueue: (...mutations: Mutation[]) => void;
@@ -260,6 +261,7 @@ export function useLiveState(date: string): LiveStateController {
   const [draft, setDraft] = useState<LocalDraft>(EMPTY_DRAFT);
   const [hydrated, setHydrated] = useState(false);
   const [synced, setSynced] = useState(false);
+  const [queuedReviewKeys, setQueuedReviewKeys] = useState<string[]>([]);
   const [mutationError, setMutationError] = useState<LiveStateController["mutationError"]>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -271,6 +273,7 @@ export function useLiveState(date: string): LiveStateController {
   const lastPracticeSyncServerNowRef = useRef(0);
 
   const persistQueue = useCallback(() => {
+    setQueuedReviewKeys(queueRef.current.flatMap(mutation => mutation.type === "review-add-today" ? mutation.reviewKeys : []));
     try {
       window.localStorage.setItem(queueKey(date), JSON.stringify(queueRef.current));
     } catch {
@@ -455,6 +458,7 @@ export function useLiveState(date: string): LiveStateController {
     } catch {
       queueRef.current = [];
     }
+    persistQueue();
 
     (async () => {
       try {
@@ -486,7 +490,7 @@ export function useLiveState(date: string): LiveStateController {
       cancelled = true;
       window.cancelAnimationFrame(frame);
     };
-  }, [date, enqueue, flush]);
+  }, [date, enqueue, flush, persistQueue]);
 
   // Persist the local cache on every change once hydrated.
   useEffect(() => {
@@ -566,6 +570,7 @@ export function useLiveState(date: string): LiveStateController {
     setNow,
     hydrated,
     synced,
+    queuedReviewKeys,
     mutationError,
     clearMutationError,
     enqueue,
