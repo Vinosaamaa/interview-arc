@@ -8,6 +8,7 @@ import {
   type BehavioralTargetBindingRead,
 } from "./behavioral-target-contract";
 import { behavioralTargetRequest } from "./behavioral-target-client";
+import { behavioralTargetErrorMessage } from "./behavioral-target-response";
 
 type Scope = { type: "session" | "activity"; id: string; label: string; detail: string };
 const BINDING_READ_LIMIT = 50;
@@ -43,13 +44,13 @@ export default function BehavioralTargetBindings({
       type: "session" as const,
       id: session.id,
       label: session.label,
-      detail: "Legacy session bindings remain readable but cannot be created or revised.",
+      detail: "Saved session context",
     })),
     ...behavioralActivities.map((activity) => ({
       type: "activity" as const,
       id: activity.id,
       label: activity.title,
-      detail: "Forward role context comes from the activity’s Loop and optional Round binding.",
+      detail: "Saved activity context",
     })),
   ], [behavioralActivities, behavioralIds, sessions]);
   const [bindings, setBindings] = useState<Record<string, BehavioralTargetBindingRead>>({});
@@ -82,7 +83,7 @@ export default function BehavioralTargetBindings({
       setBindingError(null);
     } catch (reason) {
       if (request !== latestBindingRequest.current) return;
-      setBindingError(reason instanceof Error ? reason.message : "Historical Target Profile bindings are unavailable.");
+      setBindingError(behavioralTargetErrorMessage(reason));
     }
   }, [scopes]);
   useEffect(() => {
@@ -94,9 +95,11 @@ export default function BehavioralTargetBindings({
   }, [readBindings]);
   const hasHistoricalTarget = scopes.some((scope) => Boolean(bindings[`${scope.type}:${scope.id}`]?.resolution.target));
   if (scopes.length === 0 || (!bindingError && !hasHistoricalTarget)) return null;
-  return <section className="behavioral-target-bindings" aria-labelledby="behavioral-target-bindings-title">
-    <header><div><span className="eyebrow">TODAY · LOOP CONTEXT</span><h2 id="behavioral-target-bindings-title">Role context belongs to the hiring Loop.</h2><p>Historical Target Profile bindings remain visible below. New planned activities use one optional Loop and Round with an exact immutable Role Brief revision.</p></div><small>Migration-only legacy</small></header>
-    {bindingError && <div className="target-notice error" role="alert"><span>{bindingError}</span><button type="button" onClick={() => void readBindings()}>Retry</button></div>}
-    <div className="target-binding-list">{scopes.map((scope) => <LegacyBindingRow scope={scope} state={bindings[`${scope.type}:${scope.id}`]} key={`${scope.type}:${scope.id}`} />)}</div>
-  </section>;
+  return <div className="today-saved-role-context">
+    {bindingError && <div className="target-notice error" role="alert"><span>{bindingError}</span><button type="button" onClick={() => void readBindings()}>Retry role context</button></div>}
+    {hasHistoricalTarget && <details className="behavioral-target-bindings">
+      <summary>Saved role context</summary>
+      <div className="target-binding-list">{scopes.filter((scope) => bindings[`${scope.type}:${scope.id}`]?.resolution.target).map((scope) => <LegacyBindingRow scope={scope} state={bindings[`${scope.type}:${scope.id}`]} key={`${scope.type}:${scope.id}`} />)}</div>
+    </details>}
+  </div>;
 }

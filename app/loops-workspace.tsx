@@ -233,9 +233,10 @@ function PreparationLedger({ loop, onOpenActivity, onAddPractice }: {
   onAddPractice?: (prefill: ComposerLoopPracticePrefill) => void;
 }) {
   const groups = useMemo(() => groupLoopPreparation(loop), [loop]);
-  return <section className="loop-preparation" aria-labelledby="loop-preparation-title">
+  const [collapsed, setCollapsed] = useState(true);
+  return <section className={`loop-preparation ${collapsed ? "phone-collapsed" : ""}`} aria-labelledby="loop-preparation-title">
     <header>
-      <div><h2 id="loop-preparation-title">Linked preparation</h2><p>Completed work first. Each finished attempt opens its exact Past record.</p></div>
+      <div><h2 id="loop-preparation-title"><span className="loop-desktop-heading">Linked preparation</span><button type="button" className="phone-loop-disclosure" aria-expanded={!collapsed} onClick={() => setCollapsed(!collapsed)}>Linked preparation <span aria-hidden="true">{collapsed ? "+" : "−"}</span></button></h2><p>Completed work first. Each finished attempt opens its exact Past record.</p></div>
       <div className="loop-add-practice-row">
         <small>{loop.activityBindings.length} linked</small>
         {onAddPractice ? <button type="button" className="loop-add-practice" onClick={() => onAddPractice({
@@ -346,8 +347,9 @@ function RoleBriefPanel({ loop, onOpenSource }: {
   onOpenSource: (opener: HTMLButtonElement) => void;
 }) {
   const signals = loop.roleBrief.competencySignals.length ? loop.roleBrief.competencySignals : loop.roleBrief.responsibilities;
-  return <section className="loop-role-brief" aria-labelledby="loop-role-brief-title">
-    <header><div><h2 id="loop-role-brief-title">Role context</h2><span>Role Brief revision {loop.roleBrief.revision}</span></div><small>Display-safe summary</small></header>
+  const [collapsed, setCollapsed] = useState(true);
+  return <section className={`loop-role-brief ${collapsed ? "phone-collapsed" : ""}`} aria-labelledby="loop-role-brief-title">
+    <header><div><h2 id="loop-role-brief-title"><span className="loop-desktop-heading">Role context</span><button type="button" className="phone-loop-disclosure" aria-expanded={!collapsed} onClick={() => setCollapsed(!collapsed)}>Role context <span aria-hidden="true">{collapsed ? "+" : "−"}</span></button></h2><span>Role Brief revision {loop.roleBrief.revision}</span></div><small>Display-safe summary</small></header>
     <p className="loop-role-summary">{signals[0] ?? "No display-safe role summary is recorded in this revision."}</p>
     {signals.length > 1 ? <ul>{signals.slice(1, 5).map((signal) => <li key={signal}><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" /><path d="m6.5 10 2.2 2.2 4.8-4.8" /></svg><span>{signal}</span></li>)}</ul> : null}
     <div className="loop-jd-access"><button type="button" onClick={(event) => onOpenSource(event.currentTarget)} aria-haspopup="dialog">View job description</button><span>Private source · revision {loop.roleBrief.revision}</span></div>

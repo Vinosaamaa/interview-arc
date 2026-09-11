@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { groupTranscriptTurns } from "./transcript-groups";
+import BankProgressiveStatus from "./bank-progressive-status";
 import {
   buildSelectedActivityBatch,
   type ActivityBatchDestination,
@@ -263,6 +264,7 @@ type ListPosition = {
   anchorId?: string;
   anchorOffset?: number;
   centerAnchor?: boolean;
+  bankVisibleCount?: number;
 };
 type ListMode = "main" | "pane";
 type MasterPaneState = Record<ListSurface, boolean>;
@@ -1850,6 +1852,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     setNow,
     hydrated,
     synced,
+    queuedReviewKeys,
     mutationError,
     clearMutationError,
     enqueue,
@@ -1906,6 +1909,9 @@ export default function HomeClient({ content, today, engineering, initialLocatio
   const [bankStarFilter, setBankStarFilter] = useState<"all" | "starred">("all");
   const [bankTopicsExpanded, setBankTopicsExpanded] = useState(false);
   const [bankVisibleCount, setBankVisibleCount] = useState(BANK_INITIAL_VISIBLE_COUNT);
+  const loadMoreBankQuestions = useCallback((total: number) => {
+    setBankVisibleCount(current => nextBankVisibleCount(current, total));
+  }, []);
   const [expandedBankDesk, setExpandedBankDesk] = useState<ActivityType | null>(null);
   const composerSpecialtyViewsRef = useRef<ComposerSpecialtyViews>(createComposerSpecialtyViews());
   const [composerAttentionFilters, setComposerAttentionFilters] = useState<ComposerAttentionFilter[]>([]);
@@ -2092,7 +2098,10 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     if (!listRestoring || !pending || pending.surface !== listRestoring) return;
     const list = pending.surface === "library" ? pastListRef.current : bankListRef.current;
     if (pending.surface === "banks" && list) {
-      const requiredCount = Math.ceil((pending.listScrollTop + list.clientHeight) / 150) + 4;
+      const overflowY = window.getComputedStyle(list).overflowY;
+      const requiredCount = overflowY === "auto" || overflowY === "scroll"
+        ? Math.max(Math.ceil((pending.listScrollTop + list.clientHeight) / 150) + 4, pending.bankVisibleCount ?? 0)
+        : pending.bankVisibleCount ?? bankVisibleCount;
       if (bankVisibleCount < requiredCount) {
         const frame = window.requestAnimationFrame(() => {
           setBankVisibleCount((current) => nextBankVisibleCount(current, requiredCount));
@@ -3308,6 +3317,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     const position = {
       pageScrollTop: window.scrollY,
       listScrollTop: list?.scrollTop ?? 0,
+      ...(surface === "banks" ? { bankVisibleCount } : {}),
       ...(anchor ? {
         anchorId: anchor.dataset.listItemId,
         anchorOffset: anchor.getBoundingClientRect().top - referenceTop,
@@ -4669,6 +4679,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
         ...reviewKeys,
       ]),
     ]);
+    clearMutationError();
     enqueue({
       type: "review-add-today",
       mutationId: `review-queue-${crypto.randomUUID()}`,
@@ -5745,7 +5756,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
         blockedQuestionIds={reviewBlockedQuestionIds}
         blockedTitles={reviewBlockedTitles}
         pendingReviewKeys={new Set(
-          mutationError?.type === "review-add-today" ? [] : pendingReviewKeys,
+          [...queuedReviewKeys, ...(mutationError?.type === "review-add-today" ? [] : pendingReviewKeys)],
         )}
         canAddToToday={Boolean(draft.workbench)}
         onAddToToday={addReviewsToToday}
@@ -6093,7 +6104,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
             <div className="bank-entry-meta"><span>{question.targetMinutes} min estimate</span>{question.problemNumber && <small>#{question.problemNumber}{typeof question.acceptanceRate === "number" ? ` · ${question.acceptanceRate.toFixed(1)}% acceptance` : ""}</small>}{question.companySignals?.[0] && <small>{question.companySignals[0].company} frequency {question.companySignals[0].frequencyScore}/{question.companySignals[0].frequencyScale} · {question.companySignals[0].window}</small>}{question.answerFormat && <small>{question.answerFormat} answer · {question.frequency ?? "medium"} frequency</small>}{question.solutionReference && <small>Reference solution{question.referenceAccess === "may_require_sign_in" ? " may require sign-in" : " available"}</small>}<small className={`content-tags ${type}`}>{tags.slice(0, 4).map((tag) => `#${tag}`).join("  ")}</small></div>
             <div className="bank-entry-actions"><MobileRowActions title={question.title}><StaticResultFlag outcome={latestAttempt?.outcome} /><button className={`icon-action ${isStarred(type, question.id) ? "active starred" : ""}`} onClick={() => toggleProblemStar(type, question.id)} aria-label={`${isStarred(type, question.id) ? "Unstar" : "Star"} ${question.title}`} title={isStarred(type, question.id) ? "Unstar" : "Star"}><Icon name="star" /></button><button className={`icon-action solution-control ${reusableSolution ? "solution-available" : ""}`} onClick={() => openProblemProfile(type, question)} disabled={!reusableSolution} aria-label={reusableSolution ? `View solution for ${question.title}` : `No reusable solution for ${question.title}`} title={reusableSolution ? "View solution" : "No reusable solution yet"}><Icon name="book" /></button><button className="icon-action practice" onClick={() => addBankQuestionToToday(question, type)} disabled={blockedToday} aria-label={blockedToday ? `${question.title} is already on Today` : `Practice ${question.title} today`} title={blockedToday ? "Already on Today" : "Practice today"}><Icon name="plus" /></button></MobileRowActions></div>
           </article>; })}
-          {mountedEntries.length < visibleEntries.length && <div className="bank-progressive-status" role="status">Showing {mountedEntries.length} of {visibleEntries.length} matching questions. Scroll for more.</div>}
+          {mountedEntries.length < visibleEntries.length && <BankProgressiveStatus mounted={mountedEntries.length} total={visibleEntries.length} onLoadMore={loadMoreBankQuestions} />}
           {!visibleEntries.length && <div className="quiet-empty bank-empty"><strong>No questions match these filters.</strong><span>Change type, progress, level, or search text.</span></div>}
         </div>
         </div>

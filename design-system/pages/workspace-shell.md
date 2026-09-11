@@ -32,7 +32,16 @@ Above 600px, `.mobile-interview-nav` supplies the compact local nav. Tabs evenly
 
 At **≤600px**, `.phone-navigation` shows four primary destinations and a More button when additional destinations exist. Interview uses Today, Reviews, Banks, Past, More; More contains Loops, Journey, and Materials. Engineering keeps its first four destinations plus More; Learn has four destinations. Labels never wrap. Reserve outer-page clearance and the device safe area. More and secondary row actions use the shared native modal sheet, with animated open/close, reduced-motion support, outside dismissal, Escape, and focus restoration. Filters remain a single horizontally scrollable row.
 
-Phones use short page headings and compact metrics instead of the desktop 350px hero. Reviews and Banks retain their 580px minimum results height and normal outer-page scroll chaining. Lists use one title line with full titles accessible in the reader or action sheet. Empty Learn indexes do not reserve a large blank results area. Phone rules live in `app/mobile-workspace.css`; shared containment and desktop adaptation live in `app/workspace-responsive.css`. The Banks topic ribbon uses its container width to switch to readable category rows below 1100px of available space, preserving the existing wide layout.
+Phone composition:
+
+- Use short page headings and compact metrics instead of the desktop 350px hero.
+- At ≤600px, Reviews and Banks use ordinary document scrolling with no bounded results pane or 580px minimum; preserve the desktop minimum above that breakpoint.
+- Use one title line in lists, with full titles accessible in the reader or action sheet. Empty Learn indexes reserve no large blank results area.
+- Review plus buttons stage choices without changing Today. The top cart shows the selection, supports removal, and requires explicit **Add selected to Today**. Queued or rejected saves retain selections until authoritative state confirms them. Hide the desktop selection folio on phones.
+- Keep phone rules in `app/mobile-workspace.css` and shared containment/desktop adaptation in `app/workspace-responsive.css`.
+- The Banks topic ribbon uses its container width to switch to readable category rows below 1100px of available space, preserving the existing wide layout.
+
+Engineering reads as one phone document; Index and Evidence open full-screen subviews. Index reopening preserves its scroll. Readers omit the desktop master-list toggle on phones. Loop Role context and Linked preparation start collapsed with full bodies available on expansion. Journey and Materials use compact, flat sections. Dock sizing includes the device safe area once, and page clearance follows the dock's actual height.
 
 | Workspace | N | Tabs |
 |-----------|---|------|

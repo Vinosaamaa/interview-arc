@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   filterReviewQueue,
   type ReviewQueueHorizon,
@@ -15,6 +15,7 @@ import {
 } from "./review-queue-state";
 import InterviewPageHero from "./interview-page-hero";
 import MobileRowActions from "./mobile-row-actions";
+import MobileSheet from "./mobile-sheet";
 
 type ReviewQueueViewProps = {
   items: ReviewQueueItem[];
@@ -105,6 +106,8 @@ export default function ReviewQueueView({
   const { search, specialties, due, sort, selectedKeys } = uiState;
   const folioRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; scrollLeft: number } | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
+  const closeCart = useCallback(() => setCartOpen(false), []);
 
   useEffect(() => {
     try {
@@ -118,13 +121,18 @@ export default function ReviewQueueView({
   const selectedKeySet = useMemo(() => new Set(selectedKeys), [selectedKeys]);
 
   useEffect(() => {
-    if (loading) return;
-    const frame = window.requestAnimationFrame(() => setUiState((current) => ({
-      ...current,
-      selectedKeys: current.selectedKeys.filter((key) => itemsByKey.has(key)),
-    })));
+    if (loading || stale || errorMessage) return;
+    const frame = window.requestAnimationFrame(() => setUiState((current) => {
+      const selectedKeys = current.selectedKeys.filter((key) => {
+        const item = itemsByKey.get(key);
+        return item
+          ? !(item.questionId && blockedQuestionIds.has(item.questionId)) && !blockedTitles.has(identity(item.title))
+          : pendingReviewKeys.has(key);
+      });
+      return selectedKeys.length === current.selectedKeys.length ? current : { ...current, selectedKeys };
+    }));
     return () => window.cancelAnimationFrame(frame);
-  }, [itemsByKey, loading]);
+  }, [blockedQuestionIds, blockedTitles, errorMessage, itemsByKey, loading, pendingReviewKeys, stale]);
 
   const visibleItems = useMemo(() => filterReviewQueue(items, {
     search,
@@ -171,6 +179,11 @@ export default function ReviewQueueView({
     left: direction * Math.max(220, folioRef.current.clientWidth * .7),
     behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
   });
+  const addSelection = () => {
+    onAddToToday(addableSelected);
+    // Enqueueing is not a durable save. Keep the cart through retries; owner
+    // state marks saved items as blocked or removes them from the review queue.
+  };
 
   return (
     <div className="review-queue-container"><section className="review-queue-page">
@@ -181,6 +194,9 @@ export default function ReviewQueueView({
       ]} />
 
       <div className="review-queue-controls">
+        <button type="button" className="phone-review-cart" aria-haspopup="dialog" aria-expanded={cartOpen} onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setCartOpen(true); }}>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 4h2l3 12h11l2-8H6M9 20h.01M18 20h.01" /></svg><span>Selected reviews</span><strong>{selectedItems.length}</strong><span>{selectedMinutes} min</span>
+        </button>
         <label className="review-search-bar">
           <svg aria-hidden="true" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m12.8 12.8 4.2 4.2" /></svg>
           <input type="search" value={search} onChange={(event) => updateUiState("search", event.target.value)} placeholder="Search reviews" aria-label="Search review queue" />
@@ -224,7 +240,7 @@ export default function ReviewQueueView({
                   <div className="review-row-meta review-row-static"><span className={`review-outcome-chip ${item.previousResult}`}>{resultLabel(item.previousResult)}</span><span>Due {compactDate(item.dueDate)}</span><span>{item.estimatedMinutes} min</span></div>
                   <div className="review-actions review-icon-actions">
                     <MobileRowActions title={item.title} primaryIndex={0}>
-                    <button type="button" className="review-add" title={pending ? "Adding to Today" : blocked ? "Already on Today" : "Add to Today"} aria-label={pending ? `Adding ${item.title} to Today` : blocked ? `${item.title} is already on Today` : `Add ${item.title} to Today`} disabled={!canAddToToday || blocked || pending} onClick={() => onAddToToday([item])}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></button>
+                    <button type="button" className="review-add" title={blocked ? "Already on Today" : selected ? "Remove from selection" : "Select review"} aria-label={blocked ? `${item.title} is already on Today` : `${selected ? "Remove" : "Select"} ${item.title} ${selected ? "from" : "for"} review selection`} aria-pressed={selected} disabled={blocked || pending} onClick={() => toggleSelection(item.reviewKey)}><svg aria-hidden="true" viewBox="0 0 24 24"><path d={selected ? "m5 12 4 4 10-10" : "M12 5v14M5 12h14"} /></svg></button>
                     <button type="button" title="Open previous attempt" aria-label={`Open previous attempt for ${item.title}`} onClick={(event) => { event.stopPropagation(); onOpenAttempt(item); }}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4h9l3 3v13H6z" /><path d="M15 4v4h4M9 12h6M9 16h6" /></svg></button>
                     <button type="button" title="Review next week" aria-label={`Defer ${item.title} until next week`} disabled={pending} onClick={() => onDefer(item)}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 9h16M5 5h14v15H5z" /><path d="m10 14 2 2 4-4" /></svg></button>
                     </MobileRowActions>
@@ -243,8 +259,17 @@ export default function ReviewQueueView({
           {selectedItems.length ? selectedItems.map((item) => <div className={`folio-bookmark ${item.specialty}`} key={item.reviewKey}><span aria-hidden="true">{item.specialty === "leetcode" ? "C" : item.specialty === "system_design" ? "S" : "B"}</span><div><strong>{item.title}</strong><small>{item.estimatedMinutes} min</small></div><button type="button" onClick={() => toggleSelection(item.reviewKey)} aria-label={`Remove ${item.title} from selection`}>×</button></div>) : <span className="folio-empty">Choose reviews above. The queue will not move.</span>}
         </div>
         <button type="button" className="folio-arrow" onClick={() => moveFolio(1)} aria-label="Scroll selected reviews right">→</button>
-        <button type="button" className="folio-add" disabled={!canAddToToday || addableSelected.length === 0} onClick={() => { onAddToToday(addableSelected); setUiState((current) => ({ ...current, selectedKeys: current.selectedKeys.filter((key) => !addableSelected.some((item) => item.reviewKey === key)) })); }}>Add selected to Today <span aria-hidden="true">→</span></button>
+        <button type="button" className="folio-add" disabled={!canAddToToday || addableSelected.length === 0} onClick={addSelection}>Add selected to Today <span aria-hidden="true">→</span></button>
       </aside>
+      <MobileSheet title="Selected reviews" open={cartOpen} onClose={closeCart} fullScreen>
+        <div className="phone-review-selection">
+          <p>{selectedItems.length} selected · {selectedMinutes} min</p>
+          {errorMessage && <p role="alert">That change was not saved. {errorMessage} Your selection is still here; try again.</p>}
+          {selectedItems.some((item) => pendingReviewKeys.has(item.reviewKey)) && <p role="status">Waiting for Today to confirm your selection{stale ? " when the connection returns" : ""}.</p>}
+          {selectedItems.length ? <ul>{selectedItems.map((item) => <li key={item.reviewKey}><div><strong>{item.title}</strong><small>{specialtyLabel(item.specialty)} · {item.estimatedMinutes} min{isBlocked(item) ? " · Already on Today" : ""}</small></div><button type="button" aria-label={`Remove ${item.title} from selection`} onClick={() => toggleSelection(item.reviewKey)}>Remove</button></li>)}</ul> : <p>Select reviews with the plus button. They stay here until you add them to Today.</p>}
+          <button type="button" className="folio-add" disabled={!canAddToToday || addableSelected.length === 0} onClick={addSelection}>Add selected to Today</button>
+        </div>
+      </MobileSheet>
     </section></div>
   );
 }
