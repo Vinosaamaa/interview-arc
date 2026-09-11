@@ -12,14 +12,26 @@ import { CHATGPT_PRACTICE_TOOLS } from "../mcp-worker/scoped-server.ts";
 import { availableMcpPort, runMcpCommand, startMcpWorker, stopMcpWorker, waitForMcpWorker } from "./helpers/mcp-worker-harness.mjs";
 import { profile, nativePracticeRecord } from "./helpers/solution-publication-fixture.mjs";
 
-test("bundled dedicated MCP route authenticates privately and reuses existing practice handlers", { timeout: 120000 }, async () => {
+test("bundled dedicated MCP route authenticates privately and reuses existing practice handlers", { timeout: 120000 }, async (t) => {
   const project = fileURLToPath(new URL("..", import.meta.url));
   const config = fileURLToPath(new URL("./fixtures/wrangler.chatgpt-connector.jsonc", import.meta.url));
   const wrangler = fileURLToPath(new URL("../node_modules/.bin/wrangler", import.meta.url));
   const release = await acquireMcpIntegrationLock();
-  const persistence = await mkdtemp(join(tmpdir(), "arc-chatgpt-test-"));
-  let worker; let client;
-  try {
+  let persistence; let worker; let client;
+  t.after(async () => {
+    const errors = [];
+    for (const cleanup of [
+      () => client?.close(),
+      () => stopMcpWorker(worker?.child),
+      () => persistence && rm(persistence, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }),
+      release,
+    ]) {
+      try { await cleanup(); } catch (error) { errors.push(error); }
+    }
+    if (errors.length) throw new AggregateError(errors, "Connector test cleanup failed");
+  });
+  persistence = await mkdtemp(join(tmpdir(), "arc chatgpt test-"));
+  {
     await runMcpCommand(wrangler, ["d1", "migrations", "apply", "DB", "--local", "--persist-to", persistence, "--config", config], project);
     const token = "ia_synthetic_portable_client_token_01";
     const hash = value => createHash("sha256").update(value).digest("hex");
@@ -283,5 +295,5 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     assert.equal(interruptedResult.items[1].jobId, conflictingChild.jobId);
     assert.equal(interruptedResult.items[1].receipt.failure.code, "synthetic_existing_failure");
     assert.deepEqual(await (await fetch(`${base}/fixture/immutable-practice`)).json(), originalFingerprints);
-  } finally { if (client) await client.close(); await stopMcpWorker(worker?.child); await rm(persistence, { recursive: true, force: true }); await release(); }
+  }
 });

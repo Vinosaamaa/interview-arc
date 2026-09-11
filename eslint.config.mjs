@@ -8,7 +8,7 @@ const eslintConfig = defineConfig([
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Generated Worker output, caches, and vendored agent tooling are not app sources.
-    ".wrangler/**",
+    "**/.wrangler/**",
     ".cache/**",
     "browser-profiles/**",
     ".worktrees/**",

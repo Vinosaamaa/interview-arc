@@ -13,7 +13,7 @@ async function filesIn(root, relativeDirectory, extension) {
     const entries = await readdir(directory, { withFileTypes: true });
     return entries
       .filter((entry) => entry.isFile() && entry.name.endsWith(extension))
-      .map((entry) => path.join(relativeDirectory, entry.name))
+      .map((entry) => path.posix.join(relativeDirectory, entry.name))
       .sort();
   } catch (error) {
     if (error?.code === "ENOENT") return [];

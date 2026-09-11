@@ -1,7 +1,12 @@
 # Connected ChatGPT practice: text and Live boundaries
 
-Assessment: **2026-09-09**. Provider setup and ChatGPT connector creation:
-**verified**. Owner account linking and practice tool acceptance: **pending**.
+Assessment: **2026-09-11**. Provider setup, account linking and connected-text
+practice reads/writes were verified in the
+[2026-09-10 release receipt](https://github.com/Vinosaamaa/interview-arc/issues/453#issuecomment-5626730580).
+The new Windows task currently receives `oauth_token_invalid_grant`; that
+connection requires reauthentication. Earlier acceptance does not establish
+that every later client session is connected. Physical Voice acceptance is
+still pending.
 
 The intended daily flow is text preparation from the connected private bank,
 Live conversation in the same chat where supported, then direct text save.
@@ -16,7 +21,9 @@ audience, signature and lifetime, then resolves the same normalized owner
 identity as the website. An explicit tool allowlist limits this connection to
 practice. Existing personal-token `/mcp` clients keep their current behavior.
 MCP initialization includes the canonical practice guide as server instructions,
-so the connected client receives guide v2 without an attachment or pasted setup.
+so the connected client receives the current checked-in guide without an
+attachment or pasted setup. Read its declared version rather than assuming a
+historical number.
 
 Managed OAuth needs a separate Access application with the owner's existing
 identity policy, approved ChatGPT redirect URIs and a dedicated audience.
@@ -42,18 +49,20 @@ and [Cloudflare Managed OAuth](https://developers.cloudflare.com/cloudflare-one/
 | Add a question | Insert-only private question with durable operation receipt; canonical matches reused | No implicit activity, timer, result or prompt overwrite. |
 | Text practice timers/results | Existing guarded planning, timer, mode and result handlers | Requires actual text tool calls and current revisions. |
 | Exact exchanges and code review | Existing exchange/code-attempt handlers and saved-status readback | No code execution or external judge submission is implied. |
-| Reusable answers and solution profiles | Existing provisional/finalization contracts | Text activity finalization can create a current Solution. Historical backfill can prepare a first provisional reference but cannot promote/revise current Solution; original coaching is not an official editorial. |
+| Reusable answers and solution profiles | Native finalization and later solution-publication batches | Save historical practice first, then publish or reuse a complete profile through `publish_practice_solutions`; verify each receipt. Backfill alone does not promote a Solution. Original coaching is not an official editorial. |
 | Behavioral materials | Existing preflight, accepted evidence/stories/project references, current resume library/revisions and activity-bound resume context | Missing facts remain gaps; no career administration or filesystem access. |
 | Live historical save | Strict preview/apply importer with immutable receipt and source fidelity | Exact available transcript only; incomplete evidence stays pending. |
-| Excalidraw | Read an already saved scene in revision-checked fragments | No canvas control or drawing upload; existing write roles are user-original assets, not generated references. |
+| Excalidraw | Read saved scenes or exported links in guarded fragments; attach exported drawings to completed practice | Arc does not control a canvas. `save_practice_drawing` stores the editable snapshot; generated references use `assistant_reference`. A separately connected canvas has its own export receipt. |
 | Live tool invocation | Not established | A working text connector does not prove tools are callable in Voice. |
 
 The ChatGPT Developer-mode form was inspected and OAuth discovery was missing
 before implementation. After provider setup and refreshed discovery, ChatGPT
-connector creation succeeded and entered the owner sign-in flow. Account
-linking is awaiting Mac unlock; no authenticated bank call has been observed.
-Those observations are separate from local cryptographic, SQL and MCP transport
-tests. Model, plan and
+connector creation succeeded and entered the owner sign-in flow. Later
+connected-text and website acceptance verified saved solution batches, exact
+retries, unchanged original Practice Record fingerprints, and the deployed
+coaching guide, as recorded in the release receipt above. Those account
+observations are separate from local cryptographic, SQL and MCP transport
+tests. A new connection must still pass its own authenticated read. Model, plan and
 surface restrictions still apply. The current consumer Voice documentation
 excludes connected apps/plugins; it does not establish this custom connector as
 a Live tool route. The same-chat transition must also succeed on the account.

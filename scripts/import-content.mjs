@@ -12,6 +12,7 @@ import path from "node:path";
 import { readContent } from "./content-source.mjs";
 import { buildTableRefreshSql } from "./content-import-sql.mjs";
 import { validateOwnerPrivateContentBoundary } from "./validate-owner-private-content-boundary.mjs";
+import { wranglerCommand } from "./wrangler-command.mjs";
 
 const root = process.cwd();
 const remote = process.argv.includes("--remote");
@@ -76,7 +77,6 @@ await mkdir(tmpDir, { recursive: true });
 const sqlPath = path.join(tmpDir, "import-content.sql");
 await writeFile(sqlPath, sql);
 
-const wranglerBin = path.join(root, "node_modules", ".bin", "wrangler");
 const args = ["d1", "execute", "DB", remote ? "--remote" : "--local", "--file", sqlPath];
 
 console.log(
@@ -84,6 +84,7 @@ console.log(
     `and ${bankRows.length} bank question(s) into ${remote ? "remote" : "local"} D1...`,
 );
 
-execFileSync(wranglerBin, args, { cwd: root, stdio: "inherit" });
+const invocation = wranglerCommand(args, root);
+execFileSync(invocation.command, invocation.args, { cwd: root, stdio: "inherit" });
 
 console.log("Content import complete.");

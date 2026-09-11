@@ -43,7 +43,7 @@ missing tools. Never present a generated image as an interactive MCP canvas.
   contract before switching to Live; publish its coaching instructions and
   necessary disclosed facts in the conversation, without leaking an interview
   reference answer. Never assume hidden tool results reached Voice.
-- Confirm guide version 7, the selected specialty, exact question ID, current
+- Confirm the guide version declared above, the selected specialty, exact question ID, current
   progress and observation time. Unknown is not “never attempted.”
 - Use `search` and `fetch`; follow search paging with its exact source
   revision. Refresh after saving. Never claim a partial page is the full bank.

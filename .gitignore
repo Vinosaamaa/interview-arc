@@ -39,6 +39,7 @@ yarn-error.log*
 next-env.d.ts
 /dist/
 /.wrangler/
+/tests/fixtures/.wrangler/
 /outputs/
 /work/
 /browser-profiles/
