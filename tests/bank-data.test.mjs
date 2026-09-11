@@ -11,15 +11,42 @@ async function readJson(relativePath) {
 
 test("imports the complete deduplicated TikTok company snapshot", async () => {
   const bank = await readJson("practice/leetcode/bank/questions.json");
-  assert.equal(bank.questions.length, 350);
-  assert.equal(new Set(bank.questions.map((question) => question.id)).size, 350);
-  assert.equal(new Set(bank.questions.map((question) => question.url)).size, 350);
-  assert.equal(new Set(bank.questions.map((question) => question.problemNumber)).size, 350);
+  assert.equal(bank.questions.length, 399);
+  assert.equal(new Set(bank.questions.map((question) => question.id)).size, bank.questions.length);
+  assert.equal(new Set(bank.questions.map((question) => question.url)).size, bank.questions.length);
+  assert.equal(new Set(bank.questions.map((question) => question.problemNumber)).size, bank.questions.length);
   assert.ok(bank.questions.every((question) => question.url.startsWith("https://leetcode.com/problems/")));
-  assert.ok(bank.questions.every((question) => question.companyTags.includes("TikTok")));
-  assert.ok(bank.questions.every((question) => question.companySignals.some((signal) =>
+  const snapshot = bank.questions.filter((question) => question.companyTags?.includes("TikTok"));
+  assert.equal(snapshot.length, 350);
+  assert.ok(snapshot.every((question) => question.companySignals.some((signal) =>
     signal.company === "TikTok" && signal.window === "all" && signal.frequencyScale === 8
   )));
+});
+
+test("NeetCode 150 has complete canonical membership and survives bank hydration", async () => {
+  const manifest = await readJson("practice/leetcode/bank/neetcode-150.json");
+  const bank = await readJson("practice/leetcode/bank/questions.json");
+  const ids = manifest.categories.flatMap((category) => category.questionIds);
+  assert.equal(ids.length, 150);
+  assert.equal(new Set(ids).size, 150);
+  assert.equal(manifest.categories.length, 18);
+  const tagged = bank.questions.filter((question) => question.topics.includes(manifest.tag));
+  assert.deepEqual(tagged.map((question) => question.id).sort(), [...ids].sort());
+  for (const category of manifest.categories) {
+    for (const id of category.questionIds) {
+      const question = tagged.find((candidate) => candidate.id === id);
+      assert.ok(question.active, id);
+      assert.ok(question.topics.includes(category.title), id);
+      assert.equal(question.url, `https://leetcode.com/problems/${id}/`);
+    }
+  }
+  const additions = tagged.filter((question) => question.source === "manual");
+  assert.equal(additions.length, 49);
+  assert.ok(additions.every((question) => question.companyTags.length === 0
+    && question.companySignals === undefined && question.acceptanceRate === undefined));
+  const content = await readContent(fileURLToPath(new URL("..", import.meta.url)));
+  assert.deepEqual(content.questionBanks.leetcode.filter((question) => question.topics.includes(manifest.tag))
+    .map((question) => question.id).sort(), [...ids].sort());
 });
 
 test("stores all SystemDesign.io questions with reference preparation metadata", async () => {
