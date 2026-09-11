@@ -3,7 +3,7 @@ schemaVersion: 1
 id: change-note-phone-flow-repair
 revision: 1
 type: change-note
-status: accepted
+status: released
 title: Restore ordinary phone scrolling and explicit review selection
 repository: interview-arc
 capabilityIds: ["website-navigation", "engineering-workspace"]
@@ -28,7 +28,7 @@ sources: [{"label":"Issue #347","url":"https://github.com/Vinosaamaa/interview-a
 visibility: public-safe
 publicationEligibility: eligible
 issue: 347
-pr: null
+pr: 466
 release: null
 run: null
 verification: {"state":"verified","evidenceRefs":["scripts/check-phone-flow.mjs", "scripts/check-mobile-ui.mjs", "scripts/check-mobile-readers.mjs", "tests/behavioral-target-response.test.mjs"]}

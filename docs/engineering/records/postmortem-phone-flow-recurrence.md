@@ -3,7 +3,7 @@ schemaVersion: 1
 id: postmortem-phone-flow-recurrence
 revision: 1
 type: postmortem
-status: accepted
+status: closed
 title: Verify complete phone flows after mobile layout repairs
 repository: interview-arc
 capabilityIds: ["website-navigation", "engineering-workspace"]
@@ -28,7 +28,7 @@ sources: [{"label":"Issue #347","url":"https://github.com/Vinosaamaa/interview-a
 visibility: public-safe
 publicationEligibility: eligible
 issue: 347
-pr: null
+pr: 466
 release: null
 run: null
 verification: {"state":"verified","evidenceRefs":["scripts/check-phone-flow.mjs", "scripts/check-mobile-ui.mjs", "tests/behavioral-target-response.test.mjs"]}

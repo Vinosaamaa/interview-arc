@@ -1,6 +1,7 @@
 # Phone flow recurrence — 2026-09-10
 
 Issue: [#347](https://github.com/Vinosaamaa/interview-arc/issues/347).
+Pull request: [#466](https://github.com/Vinosaamaa/interview-arc/pull/466).
 Status: local repair and validation; release and physical-device acceptance pending.
 
 The canonical versioned investigation is
