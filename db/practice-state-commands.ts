@@ -80,6 +80,7 @@ export type PracticeStateCommand =
       type: "focus-block-upsert";
       block: {
         id: string;
+        workbenchId?: string;
         date: string;
         focusCategory: "job_applications";
         title: string;

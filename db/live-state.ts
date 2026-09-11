@@ -641,6 +641,18 @@ function throwWorkbenchMutationConflict(error: unknown): never {
   throw error;
 }
 
+function workbenchRowInvariant(db: Db, ownerId: string, workbench: WorkbenchState,
+  table: typeof extraActivities | typeof liveSessions | typeof focusBlocks, id: string,
+  requestedWorkbenchId?: string) {
+  if (requestedWorkbenchId && requestedWorkbenchId !== workbench.id) {
+    throw new TimerStateConflictError("This workbench was closed. Refresh to use the current workbench.");
+  }
+  return d1TransactionalInvariantGuard(db, sql`NOT EXISTS (
+    SELECT 1 FROM ${table} WHERE ${table.ownerId} = ${ownerId} AND ${table.id} = ${id}
+      AND ${table.workbenchId} IS NOT NULL AND ${table.workbenchId} <> ${workbench.id}
+  )`);
+}
+
 export async function ensureOpenWorkbench(ownerId: string, date: string, nowMs = Date.now()) {
   const db = getDb();
   const rows = await db.select().from(practiceWorkbenches).where(eq(practiceWorkbenches.ownerId, ownerId));
@@ -1390,6 +1402,7 @@ export async function upsertExtraActivity(
     });
   const statements = [
     openWorkbenchInvariant(db, ownerId, workbench),
+    workbenchRowInvariant(db, ownerId, workbench, extraActivities, activity.id, activity.workbenchId),
     upsert,
     ...(writeBinding && resolvedBinding ? [db.insert(loopActivityBindings).values({
       ownerId,
@@ -1434,6 +1447,7 @@ export async function upsertFocusBlock(
   ownerId: string,
   input: {
     id: string;
+    workbenchId?: string;
     date: string;
     focusCategory: "job_applications";
     title: string;
@@ -1478,6 +1492,7 @@ export async function upsertFocusBlock(
   try {
     await db.batch([
       openWorkbenchInvariant(db, ownerId, workbench),
+      workbenchRowInvariant(db, ownerId, workbench, focusBlocks, input.id, input.workbenchId),
       upsert,
       advanceWorkbenchRevision(db, ownerId, workbench.id, nowMs),
     ]);
@@ -1697,6 +1712,7 @@ export async function upsertLiveSession(
   try {
     await db.batch([
       openWorkbenchInvariant(db, ownerId, workbench),
+      workbenchRowInvariant(db, ownerId, workbench, liveSessions, session.id, session.workbenchId),
       upsert,
       advanceWorkbenchRevision(db, ownerId, workbench.id, nowMs),
     ]);

@@ -3,6 +3,7 @@ import { mutationFailureDisposition } from "./mutation-queue";
 import { applyTimerSync, type TimerSyncState } from "./timer-reconciliation";
 import { requireLiveUpdateReconciliation, subscribeToLiveUpdates } from "./live-event-policy";
 import { mergePendingInteractionModes } from "./interaction-mode-view";
+import { reconcileWorkbenchCache } from "./workbench-reconciliation";
 import type { PracticeStateCommand } from "../db/practice-state-commands";
 import {
   EMPTY_DRAFT,
@@ -144,65 +145,11 @@ function serverToDraft(state: ServerLiveState, offset: number, date = ""): Local
   };
 }
 
-// Server state wins on conflict; anything created only on this device is kept and
-// reported back so it can be pushed up, so a first sync never drops local work.
+// The durable queue owns unsynced writes; the display cache cannot create rows.
 function mergeDrafts(server: LocalDraft, local: LocalDraft, queued: readonly Mutation[] = []) {
-  const serverExtraIds = new Set(server.extraActivities.map((activity) => activity.id));
-  const serverFocusBlockIds = new Set(server.focusBlocks.map((block) => block.id));
-  const serverSessionIds = new Set(server.sessions.map((session) => session.id));
-  const localOnly: Mutation[] = [];
-
-  for (const activity of local.extraActivities) {
-    if (!serverExtraIds.has(activity.id)) localOnly.push({ type: "extra-upsert", activity });
-  }
-  for (const block of local.focusBlocks) {
-    if (!serverFocusBlockIds.has(block.id)) localOnly.push({ type: "focus-block-upsert", block });
-  }
-  for (const session of local.sessions) {
-    if (!serverSessionIds.has(session.id)) localOnly.push({ type: "session-upsert", session });
-  }
-  const merged: LocalDraft = {
-    workbench: server.workbench ?? local.workbench,
-    // Once the server is reachable, mutable practice state is authoritative in
-    // D1. The persisted mutation queue—not an old display cache—owns unsynced
-    // timer, outcome, publication, and note changes.
-    timers: server.timers,
-    sessionTimers: server.sessionTimers,
-    outcomes: server.outcomes,
-    publicationStatuses: server.publicationStatuses,
-    notes: server.notes,
-    structuredNotes: { ...local.structuredNotes, ...server.structuredNotes },
-    reviews: { ...local.reviews, ...server.reviews },
-    finalizations: { ...local.finalizations, ...server.finalizations },
-    audioClips: { ...local.audioClips, ...server.audioClips },
-    deliveryAnalyses: { ...local.deliveryAnalyses, ...server.deliveryAnalyses },
-    problemPreferences: server.problemPreferences,
-    solutionProfiles: server.solutionProfiles,
-    solutionRevisions: server.solutionRevisions,
-    activitySolutionLinks: server.activitySolutionLinks,
-    personalQuestions: server.personalQuestions,
-    extraActivities: [
-      ...local.extraActivities.filter((activity) => !serverExtraIds.has(activity.id)),
-      ...server.extraActivities,
-    ],
-    focusBlocks: [
-      ...local.focusBlocks.filter((block) => !serverFocusBlockIds.has(block.id)),
-      ...server.focusBlocks,
-    ],
-    sessions: [
-      ...local.sessions.filter((session) => !serverSessionIds.has(session.id)),
-      ...server.sessions,
-    ],
-    historyActivities: server.historyActivities,
-    historyFocusBlocks: server.historyFocusBlocks,
-    historySessions: server.historySessions,
-    interactionModeRegistry: server.interactionModeRegistry ?? local.interactionModeRegistry,
-    interactionModes: mergePendingInteractionModes(server.interactionModes, local.interactionModes, queued),
-    focusedActivityId: server.focusedActivityId ?? local.focusedActivityId,
-    focusedSessionId: server.focusedSessionId ?? local.focusedSessionId,
-    focusedAt: server.focusedAt ?? local.focusedAt,
-  };
-  return { merged, localOnly };
+  const result = reconcileWorkbenchCache(server, local, queued);
+  result.merged.interactionModes = mergePendingInteractionModes(server.interactionModes, local.interactionModes, result.mutations);
+  return result;
 }
 
 function readDraft(date: string): LocalDraft {
@@ -267,6 +214,8 @@ export function useLiveState(date: string): LiveStateController {
 
   const offsetRef = useRef(0);
   const queueRef = useRef<Mutation[]>([]);
+  const workbenchIdRef = useRef<string | null>(null);
+  useEffect(() => { workbenchIdRef.current = draft.workbench?.id ?? null; }, [draft.workbench?.id]);
   const flushingRef = useRef(false);
   const reconcilingRef = useRef(false);
   const lastTimerSyncServerNowRef = useRef(0);
@@ -367,7 +316,14 @@ export function useLiveState(date: string): LiveStateController {
           ? null
           : current
       ));
-      queueRef.current = [...queueRef.current, ...mutations];
+      const scoped = mutations.map((mutation): Mutation => {
+        const workbenchId = workbenchIdRef.current ?? undefined;
+        if (mutation.type === "extra-upsert") return { ...mutation, activity: { ...mutation.activity, workbenchId: mutation.activity.workbenchId ?? workbenchId } };
+        if (mutation.type === "session-upsert") return { ...mutation, session: { ...mutation.session, workbenchId: mutation.session.workbenchId ?? workbenchId } };
+        if (mutation.type === "focus-block-upsert") return { ...mutation, block: { ...mutation.block, workbenchId: mutation.block.workbenchId ?? workbenchId } };
+        return mutation;
+      });
+      queueRef.current = [...queueRef.current, ...scoped];
       persistQueue();
       void flush();
     },
@@ -469,11 +425,12 @@ export function useLiveState(date: string): LiveStateController {
         if (cancelled) return;
         offsetRef.current = state.serverNow - Date.now();
         const serverDraft = serverToDraft(state, offsetRef.current, date);
-        const { merged, localOnly } = mergeDrafts(serverDraft, localDraft, queueRef.current);
+        const { merged, mutations } = mergeDrafts(serverDraft, localDraft, queueRef.current);
+        queueRef.current = mutations;
+        persistQueue();
         serverApplied = true;
         setDraft(() => merged);
         setHydrated(true);
-        if (localOnly.length > 0) enqueue(...localOnly);
         setSynced(true);
       } catch {
         if (!cancelled) setSynced(false);
@@ -491,7 +448,7 @@ export function useLiveState(date: string): LiveStateController {
       cancelled = true;
       window.cancelAnimationFrame(frame);
     };
-  }, [date, enqueue, flush, persistQueue]);
+  }, [date, flush, persistQueue]);
 
   // Persist the local cache on every change once hydrated.
   useEffect(() => {
