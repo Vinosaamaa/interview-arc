@@ -15,7 +15,7 @@ modules: ["website-navigation", "engineering-workspace", "practice-readers", "to
 interfaces: ["review-queue", "mobile-secondary-actions", "engineering-record-reader"]
 seams: ["Desktop containment versus phone document scrolling", "Queued writes versus durable confirmation", "HTTP response body versus typed context reader"]
 adapters: ["app/mobile-workspace.css", "app/mobile-sheet.tsx", "app/behavioral-target-response.ts"]
-relatedRecords: ["postmortem-mobile-sheet-scroll-layout@1", "change-note-phone-flow-repair@1"]
+relatedRecords: ["postmortem-mobile-sheet-scroll-layout@1", "change-note-mobile-workspace-composition@1"]
 decisions: []
 incidents: []
 features: []
@@ -71,6 +71,13 @@ checks to coexist with the owner's reported layout and interaction problems.
 
 ## Correction and prevention
 
+At 600 CSS pixels and below, Engineering reads as an ordinary document, with
+full-screen Index and Evidence and remembered Index scroll. Readers omit the
+desktop master-list toggle. Loop Role context and Linked preparation start
+collapsed; Journey metrics and Materials sections have less nested chrome.
+Decorative atmosphere is hidden after arrival without changing its saved
+preference. Larger-screen navigation and containment remain intact.
+
 Issue #347 owns the correction. Phone contracts now explicitly require document
 scrolling, selection before mutation, full-screen auxiliary navigation, and
 collapsed optional Loop content. The focused browser fixture checks populated
@@ -91,3 +98,16 @@ removing inner scrolling: Banks still loaded its next batch only from the old
 list scroll event. A viewport sentinel now drives phone loading, and the test
 reaches every matching question beyond the first 36. Changing scroll ownership
 must include paging and restoration, not only overflow measurements.
+
+Reloading restores pending review selection from the existing persisted write
+queue. Add stays disabled for queued items; reconnect replays the same operation
+ID. Remembered Banks position includes its mounted count and visible anchor, so
+returning from another destination restores a question beyond the first batch.
+
+Local Chromium and WebKit populated-flow checks passed at 390×844, including
+queued reload recovery and all 480 fixture questions. Both 17-destination suites
+passed at 440×956, and independent WebKit checks passed at 375 pixels. Reader
+breakpoint and scrolled-Past restoration checks, lint, the production application
+build, and 17 focused regressions passed. Exact hosted and deployment receipts
+belong to PR #466 and issue #347; this branch document does not establish
+physical-device acceptance.
