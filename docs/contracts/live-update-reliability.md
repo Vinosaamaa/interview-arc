@@ -33,6 +33,13 @@ a replacement database.
 
 ## Connection and fallback
 
+An authoritative snapshot replaces browser display-cache rows and cleared
+focus. Only an explicit persisted mutation may restore an optimistic row;
+never infer a creation from its absence on the server. Pending upserts remain
+bound to their originating workbench. Existing archived activity, session and
+focus-block IDs cannot be reassigned by stale clients, even without an explicit
+workbench field; the ownership check and write share one D1 transaction.
+
 While the WebSocket is healthy, clients make no recurring synchronization HTTP
 requests. Local one-second clocks may continue to repaint elapsed time without
 network traffic.

@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../../db";
+import { TimerStateConflictError } from "../../db/live-state";
 import {
   addReviewQueueItemsToToday,
   ReviewQueueConflictError,
@@ -94,6 +95,9 @@ const worker = {
     } catch (error) {
       if (error instanceof PracticeStateCommandInputError) {
         return Response.json({ error: error.message }, { status: error.status });
+      }
+      if (error instanceof TimerStateConflictError) {
+        return Response.json({ error: error.message }, { status: 409 });
       }
       if (error instanceof ReviewQueueConflictError || error instanceof TodayPlanningConflictError) {
         return Response.json({ error: error.message, code: error.code }, { status: 409 });

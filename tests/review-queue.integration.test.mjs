@@ -150,6 +150,23 @@ test("concurrent Review Queue planning is atomic, replay-safe, and owner-isolate
     });
     await waitForWorker(baseUrl, worker);
 
+    // A second browser may replay cached rows without their original workbench
+    // field. The existing D1 binding must still prevent resurrection.
+    const staleActivity = { schemaVersion: 2, id: "stale-activity", date: "2026-08-09", source: "extra", type: "leetcode", title: "Synthetic stale-cache fixture", timerGroupId: "stale-activity", allocatedSeconds: 600, status: "planned" };
+    const staleSession = { id: "stale-session", date: "2026-08-09", source: "extra", label: "Stale session", allocatedSeconds: 600, activityIds: [staleActivity.id] };
+    const staleBlock = { id: "stale-focus", date: "2026-08-09", focusCategory: "job_applications", title: "Stale focus", plannedSeconds: 600 };
+    const staleWrites = [{ type: "extra-upsert", activity: staleActivity }, { type: "session-upsert", session: staleSession }, { type: "focus-block-upsert", block: staleBlock }];
+    for (const command of staleWrites) assert.equal((await commandResponse(baseUrl, "owner-stale", command, 1000)).status, 200);
+    assert.equal((await commandResponse(baseUrl, "owner-stale", { type: "workbench-start-fresh", workbenchId: "wb-after-reset" }, 2000)).status, 200);
+    for (const command of staleWrites) assert.equal((await commandResponse(baseUrl, "owner-stale", command, 3000)).status, 409);
+    const afterReset = await inspect(baseUrl, "owner-stale", "wb-after-reset");
+    assert.equal(afterReset.activities.length, 0);
+    assert.equal(afterReset.sessions.length, 0);
+    assert.equal(afterReset.focusBlocks.length, 0);
+    assert.equal((await commandResponse(baseUrl, "owner-stale", { type: "extra-upsert", activity: { ...staleActivity, id: "offline-old", workbenchId: "archived-workbench" } }, 4000)).status, 409);
+    assert.equal((await commandResponse(baseUrl, "owner-stale", { type: "extra-upsert", activity: { ...staleActivity, id: "new-activity", workbenchId: "wb-after-reset" } }, 5000)).status, 200);
+    assert.equal((await inspect(baseUrl, "owner-stale", "wb-after-reset")).activities.length, 1);
+
     const invalidOutcome = await commandResponse(baseUrl, "owner-invalid", {
       type: "outcome",
       activityId: "invalid-outcome",
