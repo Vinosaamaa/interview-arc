@@ -97,7 +97,11 @@ export async function stopMcpWorker(child) {
   const exited = new Promise((resolve) => child.once("exit", resolve));
   if (process.platform === "win32") {
     // Killing the wrapper alone leaves Wrangler/workerd holding the D1 files.
-    await runMcpCommand("taskkill", ["/PID", String(child.pid), "/T", "/F"]);
+    try {
+      await runMcpCommand("taskkill", ["/PID", String(child.pid), "/T", "/F"]);
+    } catch (error) {
+      if (child.exitCode === null && child.signalCode === null) throw error;
+    }
   } else {
     child.kill("SIGTERM");
   }
