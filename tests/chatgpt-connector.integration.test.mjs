@@ -17,7 +17,7 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
   const config = fileURLToPath(new URL("./fixtures/wrangler.chatgpt-connector.jsonc", import.meta.url));
   const wrangler = fileURLToPath(new URL("../node_modules/.bin/wrangler", import.meta.url));
   const release = await acquireMcpIntegrationLock();
-  const persistence = await mkdtemp(join(tmpdir(), "arc-chatgpt-test-"));
+  const persistence = await mkdtemp(join(tmpdir(), "arc chatgpt test-"));
   let worker; let client;
   try {
     await runMcpCommand(wrangler, ["d1", "migrations", "apply", "DB", "--local", "--persist-to", persistence, "--config", config], project);
@@ -283,5 +283,11 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     assert.equal(interruptedResult.items[1].jobId, conflictingChild.jobId);
     assert.equal(interruptedResult.items[1].receipt.failure.code, "synthetic_existing_failure");
     assert.deepEqual(await (await fetch(`${base}/fixture/immutable-practice`)).json(), originalFingerprints);
-  } finally { if (client) await client.close(); await stopMcpWorker(worker?.child); await rm(persistence, { recursive: true, force: true }); await release(); }
+  } finally {
+    try {
+      if (client) await client.close();
+      await stopMcpWorker(worker?.child);
+      await rm(persistence, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } finally { await release(); }
+  }
 });

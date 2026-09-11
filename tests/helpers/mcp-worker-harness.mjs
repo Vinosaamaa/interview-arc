@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
+import { basename } from "node:path";
+import { wranglerCommand } from "../../scripts/wrangler-command.mjs";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -20,7 +22,10 @@ export function availableMcpPort() {
 
 export function runMcpCommand(command, args, cwd) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd });
+    const invocation = /^wrangler(?:\.cmd)?$/i.test(basename(command))
+      ? wranglerCommand(args, cwd)
+      : { command, args };
+    const child = spawn(invocation.command, invocation.args, { cwd });
     let stdout = "";
     let stderr = "";
     child.stdout?.on("data", (chunk) => { stdout += chunk; });
@@ -52,8 +57,8 @@ export function sanitizeMcpWorkerDiagnostic(value, sensitivePaths = []) {
     .trim();
 }
 
-export function startMcpWorker({ wrangler, config, persistence, project, port }) {
-  const child = spawn(wrangler, [
+export function startMcpWorker({ config, persistence, project, port }) {
+  const invocation = wranglerCommand([
     "dev",
     "--inspector-port",
     "0",
@@ -66,7 +71,8 @@ export function startMcpWorker({ wrangler, config, persistence, project, port })
     "127.0.0.1",
     "--port",
     String(port),
-  ], {
+  ], project);
+  const child = spawn(invocation.command, invocation.args, {
     cwd: project,
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -89,7 +95,12 @@ export function startMcpWorker({ wrangler, config, persistence, project, port })
 export async function stopMcpWorker(child) {
   if (!child || child.exitCode !== null || child.signalCode !== null) return;
   const exited = new Promise((resolve) => child.once("exit", resolve));
-  child.kill("SIGTERM");
+  if (process.platform === "win32") {
+    // Killing the wrapper alone leaves Wrangler/workerd holding the D1 files.
+    await runMcpCommand("taskkill", ["/PID", String(child.pid), "/T", "/F"]);
+  } else {
+    child.kill("SIGTERM");
+  }
   await exited;
 }
 
