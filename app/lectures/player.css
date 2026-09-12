@@ -181,6 +181,24 @@
 .lecture-preparation p {
   margin:0 0 14px
 }
+.lecture-preparation button {
+  margin:0 8px 12px 0
+}
+.lecture-preparation label {
+  display:grid;
+  gap:5px;
+  margin:0 0 14px
+}
+.lecture-preparation select {
+  width:100%;
+  min-width:0;
+  min-height:44px;
+  padding:8px;
+  border:1px solid #c8d8d3;
+  border-radius:8px;
+  background:#fbfcfa;
+  color:#102a2a
+}
 .lecture-transport {
   display:flex;
   align-items:center;

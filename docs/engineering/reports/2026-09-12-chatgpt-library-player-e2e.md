@@ -17,7 +17,7 @@ Record deployed commits and the host/browser/app version before testing.
 | Read an image and a PDF diagram/scanned page | Assistant identifies synthetic visual details using actual image/page output; missing support is explicit | Pending actual host |
 | Ask for an activity based on a source | Question is created/reused, activity appears in Today, exact source links survive reread | Pending actual host |
 | Upload a changed version and retry an interrupted upload | Earlier original remains; exact retry avoids duplicate resources | Pending actual host |
-| Ask ChatGPT to prepare a one-hour lecture and open its player | Script saved, real widget renders in the conversation, generation controls invoke the configured speech provider | Actual ChatGPT opened the existing 43-word smoke-test player and confirmed speechConfigured=true. One generation attempt returned HTTP 429; the API billing dashboard shows zero remaining credit. Full lecture generation remains pending. |
+| Ask ChatGPT to prepare a one-hour lecture and open its player | Script saved and the real widget renders free playback controls in the conversation | Actual ChatGPT opened the existing 43-word smoke-test player. A legacy generation attempt returned HTTP 429. Free device speech is implemented in PR #479; actual ChatGPT acceptance remains pending. |
 | Play prepared speech for 60 minutes in the ChatGPT conversation | Measured listening duration, uninterrupted playback across all parts, no next-message prompts or navigation to Arc | Pending actual host/provider |
 | Pause, close/reopen player and seek | Confirmed saved position resumes; expired media access refreshes | Pending actual host |
 | Repeat on mobile, including app background and screen lock | Record each actual outcome separately; desktop success does not imply mobile success | Pending physical device |
@@ -59,13 +59,12 @@ is relaxed.
 Speech configuration was subsequently stored in both deployed Workers. Actual
 ChatGPT confirmed the configured state and attempted the existing short section
 once. The section is failed, with no ready audio. The server currently maps all
-HTTP 429 responses to a generic rate-limit message; the signed-in API billing
-page independently shows a free-trial account with zero remaining credit.
-The owner rejected purchasing credit and requires free speech. Device-local
-speech is now being investigated under #473; no further paid request is authorized.
-No paid credit purchase, audible
-playback, one-hour duration, mobile background playback or screen-lock acceptance
-has been completed.
+HTTP 429 responses to a generic rate-limit message. Free speech is required;
+no further paid request is authorized. PR #479 implements speech on the listening
+device with no PC connection. The built website and isolated iframe completed
+two sections with an installed voice; website pause/resume and section selection
+also passed. This is local acceptance, not proof of actual ChatGPT playback,
+one-hour duration, physical mobile background playback or screen-lock continuity.
 
 
 ## Local integration observations

@@ -26,11 +26,11 @@ export async function openLecturePlayer(db:LectureDatabase,owner:string,id:strin
     audioUrl=`${origin}/lecture-media?ticket=${token}`;
   }
   const {fragment: _fragment, playerUrl: _playerUrl, ...data}=lecture;
-  void _fragment; void _playerUrl;
+  void _playerUrl;
   return {structuredContent:{lecture:data,ready,speechConfigured:configured},
     content:[{type:"text" as const,text:JSON.stringify({lectureId:id,title:lecture.title,ready,estimatedMinutes:lecture.estimatedMinutes,speechConfigured:configured,
-      instruction:"Use the player in this conversation. A target or estimate is not measured audio duration. Generation uses the configured speech API. Mobile background and lock-screen playback depend on the host app."})}],
-    _meta:{audioUrl,expiresAt}};
+      instruction:"Use Play free on this device in the player. It reads the saved original using an installed device voice, with no paid speech API or connection to a PC. Do not call paid audio generation for free playback. A script estimate is not measured duration. Mobile background and lock-screen playback depend on the host app."})}],
+    _meta:{audioUrl,expiresAt,scriptFragment:_fragment}};
 }
 export async function routeLectureMedia(db:LectureDatabase,bucket:Pick<R2Bucket,"get">,request:Request){
   const url=new URL(request.url);
@@ -51,14 +51,14 @@ export async function routeLectureMedia(db:LectureDatabase,bucket:Pick<R2Bucket,
 }
 export function registerLecturePlayerTools(server:McpServer,db:LectureDatabase,bucket:Bucket,owner:string,apiKey:string|undefined){
   server.registerResource("lecture-player",lecturePlayerUri,{},async()=>({contents:[{uri:lecturePlayerUri,mimeType:"text/html;profile=mcp-app",text:lecturePlayerHtml,
-    _meta:{ui:{prefersBorder:true,csp:{connectDomains:[],resourceDomains:[mediaOrigin]}},"openai/widgetDescription":"Generate and play a complete Professor lecture inside this ChatGPT conversation, with a continuous seekable recording and saved position."}}]}));
+    _meta:{ui:{prefersBorder:true,csp:{connectDomains:[],resourceDomains:[mediaOrigin]}},"openai/widgetDescription":"Read the original lecture automatically using a free voice installed on this device. No paid API or PC connection. Previously prepared recordings also remain playable."}}]}));
   server.registerTool("open_practice_lecture_player",{
-    title:"Open lecture player",description:"Open the saved Professor lecture as an audio player inside this ChatGPT conversation. The player can generate all missing speech sections, then play one continuous recording without another chat turn between sections. Returns real preparation state and saved position. Does not automatically start audio or charge for speech. Mobile background/lock-screen playback is host-dependent and not guaranteed.",
+    title:"Open lecture player",description:"Open a saved Professor lecture inside this ChatGPT conversation. Play free on this device uses an installed local voice and automatically reads the original sections with saved word/sentence position. No API credit, paid speech request, or PC connection is needed. The owner presses Play. Host voice availability, background and screen-lock behavior must be verified; do not promise a measured hour from a script estimate. Previously prepared recordings remain available.",
     inputSchema:{lectureId},annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false},
     _meta:{...appMeta,ui:{...appMeta.ui,resourceUri:lecturePlayerUri},"openai/outputTemplate":lecturePlayerUri},
   },async({lectureId:id})=>{try{return await openLecturePlayer(db,owner,id,Boolean(apiKey));}catch(e){return {isError:true,content:[{type:"text" as const,text:e instanceof LectureError?e.message:"Player could not be opened."}]};}});
   server.registerTool("generate_lecture_audio_section",{
-    description:"After the user asks to generate a lecture's audio, request one saved script section from the configured OpenAI speech API. This can incur API usage. Repeat for missing section indices, preserving lecture identity, then open_practice_lecture_player for in-chat continuous playback. Existing ready audio is reused. On uncertainty reread state; do not change script IDs to force duplicate generation. This is prepared audio, not a ChatGPT Live speaking turn.",
+    description:"Legacy PAID speech option. Use only after the owner explicitly authorizes paid speech API usage. Never call this for free playback: open_practice_lecture_player provides a device-local voice without API credit. This tool requests one original script section from OpenAI and can incur charges; ready audio is reused. On uncertainty reread state and preserve lecture identity.",
     inputSchema:{lectureId,chunkIndex:z.number().int().min(0).max(199)},annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:true},_meta:appMeta,
   },async({lectureId:id,chunkIndex})=>{try{const data=await generateLectureAudio(db,bucket,owner,id,chunkIndex,apiKey);return {structuredContent:data,content:[{type:"text" as const,text:JSON.stringify(data)}]};}catch(e){return {isError:true,content:[{type:"text" as const,text:e instanceof LectureError?e.message:"Audio generation failed. Reread preparation state before retrying."}]};}});
 }

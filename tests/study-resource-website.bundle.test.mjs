@@ -39,20 +39,23 @@ test('built website preserves large multipart originals and still enforces uploa
   assert.deepEqual(Buffer.from(await original.arrayBuffer()),bytes);
   const retry=await send(bytes,'large-original');
   assert.equal(retry.status,200);assert.equal((await retry.json()).resource.resourceId,saved.resource.resourceId);
-  assert.equal((await send(bytes,'wrong-origin','https://unrelated.example')).status,403);
-  // The Worker rejects declared oversized bodies before consuming them. Node's
-  // fetch can race that response with its large request-body write (EPIPE), so
-  // inspect the actual HTTP response with a client that handles early responses.
+  // Origin validation precedes body parsing. Probe it without an unread body:
+  // the local proxy can otherwise break the next request after early rejection.
+  // Accepted and oversized multipart bodies are exercised separately here.
+  const foreign=await fetch(base+'/api/study-resources',{method:'POST',headers:{origin:'https://unrelated.example'}});
+  assert.equal(foreign.status,403,await foreign.text());
+  // Read the complete oversized-file rejection with a native HTTP client.
+  // The whole multipart body remains below the separate request-body limit.
   const oversizedForm=new FormData();oversizedForm.set('file',new Blob([Buffer.alloc(25*1024*1024+1,37)]),'oversized.bin');
   const encoded=new Response(oversizedForm),body=Buffer.from(await encoded.arrayBuffer());
   const oversized=await new Promise((resolve,reject)=>{
     let received=false;
     const req=request(base+'/api/study-resources',{method:'POST',headers:{origin:base,'content-type':encoded.headers.get('content-type'),'content-length':body.length}},res=>{
-      received=true;const parts=[];res.on('data',part=>parts.push(part));res.on('error',reject);res.on('end',()=>resolve({status:res.statusCode,text:Buffer.concat(parts).toString()}));
+      received=true;const parts=[];res.on('data',part=>parts.push(part));res.on('error',error=>reject(Error(`HTTP ${res.statusCode}: ${error.message}; ${Buffer.concat(parts).toString()}\n${worker.readDiagnosticTail()}`)));res.on('end',()=>resolve({status:res.statusCode,text:Buffer.concat(parts).toString()}));
     });
-    req.on('error',error=>{if(!received)reject(error);});req.end(body);
+    req.on('error',error=>{if(!received)reject(Error(error.message+'\n'+worker.readDiagnosticTail()));});req.end(body);
   });
-  assert.equal(oversized.status,413);assert.match(JSON.parse(oversized.text).error,/25 MB|supported size/);
+  assert.equal(oversized.status,413,oversized.text+'\n'+worker.readDiagnosticTail());assert.match(JSON.parse(oversized.text).error,/25 MB|supported size/);
   const list=await (await fetch(base+'/api/study-resources')).json();
   assert.equal(list.resources.length,1,'failed and retried uploads do not create extra resources');
 });

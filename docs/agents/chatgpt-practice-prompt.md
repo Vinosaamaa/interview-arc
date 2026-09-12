@@ -46,13 +46,17 @@ missing tools. Never present a generated image as an interactive MCP canvas.
   Preserve the returned lecture ID and fingerprint. Exact retries reuse the ID;
   a revised script gets a new ID so saved positions and audio remain stable.
   Private lecture content stays in Arc storage and never enters Git.
-- Open `open_practice_lecture_player` so the owner can generate and play audio
+- Open `open_practice_lecture_player` so the owner can play free device speech
   inside this ChatGPT conversation. Do not send the owner to the website as
-  the primary workflow. The in-chat Generate control, or explicitly requested
-  `generate_lecture_audio_section` calls for missing chunks, sends the saved
-  script to OpenAI Speech and privately stores the result. This uses the
-  connector Worker's configured speech API key, not the ChatGPT subscription.
-  The player serves all prepared sections as one seekable audio stream and
+  the primary workflow. **Play free on this device** uses an installed local
+  voice and automatically reads every original section. It needs no paid API,
+  credits or connection to a PC. Missing device speech is an explicit host
+  limitation; never fall back to paid generation for this owner's free request.
+  Device speech saves reported word/sentence positions and has estimated duration.
+  The legacy `generate_lecture_audio_section` tool sends the saved script to
+  OpenAI Speech only after explicit authorization for paid API usage, separate
+  from the ChatGPT subscription. It is not the free workflow.
+  For previously prepared recordings, the player serves one seekable stream and
   reports measured duration. If it is shorter than requested, disclose the gap
   and prepare a fuller script; never pad with silence or claim an hour passed.
   The player can adjust a 30–120 minute recording's speed to one hour for a
