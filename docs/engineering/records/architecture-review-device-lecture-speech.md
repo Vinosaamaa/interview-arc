@@ -34,9 +34,9 @@ run: null
 ---
 # Read prepared lectures with free device-local speech
 
-The paid speech dependency did not meet the owner's requirement. A real short
-generation request returned HTTP 429, and API billing had no remaining credit.
-The owner explicitly rejected buying credit and requires a free alternative.
+The paid speech dependency did not meet the free-playback requirement. A real
+short generation request returned HTTP 429. The default must work without a
+paid speech provider.
 
 The default player now uses an installed device voice through SpeechSynthesis.
 Only voices advertising localService are eligible. The player does not connect
