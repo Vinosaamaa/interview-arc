@@ -125,6 +125,7 @@ enabled_tools = [
   "save_study_resource_file",
   "open_practice_lecture_player",
   "generate_lecture_audio_section",
+  "open_study_resource_uploader",
 ]
 startup_timeout_sec = 15.0
 tool_timeout_sec = 60.0

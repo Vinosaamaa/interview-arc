@@ -96,6 +96,15 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     assert.equal((await inChatAudio.arrayBuffer()).byteLength, 10);
     assert.equal((await fetch(localTicketUrl, { method: "POST" })).status, 405);
     const playerWidget = await client.readResource({ uri: "ui://interview-arc/lecture-player-v1.html" });
+    const filePicker = await client.callTool({ name: "open_study_resource_uploader", arguments: {} });
+    assert.equal(filePicker.isError, undefined, JSON.stringify(filePicker));
+    const fileWidget = await client.readResource({ uri: "ui://interview-arc/study-resource-uploader-v1.html" });
+    assert.match(fileWidget.contents[0].text, /getFileDownloadUrl/);
+    assert.match(fileWidget.contents[0].text, /Select from ChatGPT/);
+    const fileTools = await client.listTools();
+    const saveFileTool = fileTools.tools.find(tool => tool.name === "save_study_resource_file");
+    assert.deepEqual(saveFileTool._meta['openai/fileParams'], ['file']);
+    assert.equal(saveFileTool._meta['openai/widgetAccessible'], true);
     assert.match(playerWidget.contents[0].text, /Generate lecture audio/);
     assert.match(playerWidget.contents[0].text, /Fit full lecture to 1 hour/);
     const lectureAudio = await fetch(`${base}/fixture/lecture-audio`);

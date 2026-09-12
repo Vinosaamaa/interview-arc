@@ -12,7 +12,7 @@ Record deployed commits and the host/browser/app version before testing.
 | Actual ChatGPT scenario | Required observation | Current status |
 | --- | --- | --- |
 | Attach HTML, TXT, MD, PDF and image in ChatGPT; ask Arc to save them | Real file picker supplies attachments, tool confirms originals, website lists the same files | Pending actual host |
-| Upload separate files through website; ask ChatGPT to find/read them | Same owner library, full fragments retrieved, exact code/details retained | Pending actual host |
+| Upload separate files through website; ask ChatGPT to find/read them | Same owner library, full fragments retrieved, exact code/details retained | 2026-09-12: 15 HTML originals saved; stored hashes matched local originals; actual ChatGPT found all 15 and read the first fragment of each. Complete multi-fragment reading remains a separate check. |
 | Read a source longer than one fragment | All fragment indices and source hash checked; no summary substituted | Pending actual host |
 | Read an image and a PDF diagram/scanned page | Assistant identifies synthetic visual details using actual image/page output; missing support is explicit | Pending actual host |
 | Ask for an activity based on a source | Question is created/reused, activity appears in Today, exact source links survive reread | Pending actual host |
@@ -27,9 +27,18 @@ whether it belongs to Arc or the host, and the exact retest. Do not sign off
 based on a tool call alone: verify the resulting library entry, planned activity
 or audible player state in the user's interface.
 
-An authenticated production connector read currently succeeds. The new feature
-tools still require release before their actual-host tests can pass. No real
-ChatGPT feature test has yet been recorded as passed in this report.
+Production release d09bee22c64943bd3c234190c2ad37202c2e6fcc passed. Refreshing the
+Interview Arc plugin and reloading the ChatGPT conversation exposed its tools.
+Actual ChatGPT saved/listed a synthetic 43-word lecture and displayed its player.
+Speech configuration was absent, so no audio was generated. The host already had
+CSP disabled; strict CSP acceptance is not established by this render.
+
+An actual attached TXT failed to reach the library because a supported host
+download URL was not supplied. A later website upload test saved 15 HTML files;
+ChatGPT independently discovered and read each first fragment. Stored original
+hashes matched the source files. Larger original archives failed with a plain
+HTTP 413 before the library's handler, exposing the framework's 1 MiB multipart
+server-action limit. Follow-up fixes and retests are owned by issue #475.
 
 
 ## Local integration observations

@@ -1,6 +1,7 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { POST as uploadStudyResource } from "../app/api/study-resources/route";
 import { resolveOwnerId, TRUSTED_EMAIL_HEADER } from "../db/owner";
 import { connectOwnerLiveUpdates, OwnerLiveUpdateHub } from "./live-update-hub";
 
@@ -321,6 +322,13 @@ const worker = {
     const authenticatedRequest = new Request(request, { headers });
 
     const url = new URL(authenticatedRequest.url);
+
+    // Vinext probes multipart POSTs as progressive server actions before route
+    // dispatch, imposing its 1 MiB action limit. This route owns a bounded
+    // 25 MiB upload and its own same-origin check; keep it after authentication.
+    if (url.pathname === "/api/study-resources" && authenticatedRequest.method === "POST") {
+      return uploadStudyResource(authenticatedRequest);
+    }
 
     if (url.pathname === "/api/live-events") {
       const ownerId = await resolveOwnerId(authenticatedRequest);
