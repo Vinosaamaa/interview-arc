@@ -113,6 +113,12 @@ enabled_tools = [
   "get_practice_coaching_guide",
   "publish_practice_solutions",
   "get_practice_solution_batch",
+  "search_study_resources",
+  "get_study_resource",
+  "link_study_resource",
+  "get_study_resource_image",
+  "get_study_resource_original",
+  "save_study_resource_file",
 ]
 startup_timeout_sec = 15.0
 tool_timeout_sec = 60.0

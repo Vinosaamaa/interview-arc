@@ -189,6 +189,7 @@ function LearnHero({ destination, payload }: { destination: LearnDestination; pa
       <h1>{copy.title}</h1>
       <HeroQuote className="learn-hero-quote">{copy.quote}</HeroQuote>
       <p className="learn-hero-lede">{copy.description}</p>
+      <a href="/resources">Study resource library</a>
     </div>
     <div className="learn-animal-sketch"><LearnAnimalSketch destination={destination} /></div>
     <span className="learn-hero-pulse" aria-hidden="true" />

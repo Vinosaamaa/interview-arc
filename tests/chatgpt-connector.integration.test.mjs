@@ -1,3 +1,4 @@
+import { resourceHtml, resourcePdf, resourcePng } from "./fixtures/study-resource-content.mjs";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -79,6 +80,25 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
       assert.equal(createHash("sha256").update(full).digest("hex"), expectedSha256);
     }
     assert.equal((await client.callTool({name:"get_practice_coaching_guide",arguments:{specialty:"system-design",document:"system-design-arc",offset:16000,expectedSha256:"0".repeat(64)}})).isError,true);
+    const attached = await client.callTool({ name: "save_study_resource_file", arguments: { operationId: "chat-attachment", title: "Chat attached original", file: {download_url:"https://files.oaiusercontent.com/synthetic-library.txt",file_id:"file-synthetic",file_name:"source.txt",mime_type:"text/plain"} } });
+    assert.equal(attached.isError,undefined,JSON.stringify(attached));
+    const attachedId = attached.structuredContent.resource.resourceId;
+    const websiteRead = await fetch(`${base}/fixture/resources?resourceId=${attachedId}`);
+    assert.equal(websiteRead.status,200);assert.equal((await websiteRead.json()).fragment.text,"Exact ChatGPT attachment content.\n");
+    for (const [filename,bytes] of [["source.html",Buffer.from(resourceHtml)],["paper.pdf",resourcePdf()],["picture.png",resourcePng]]) {
+      const form = new FormData();form.set("file",new Blob([bytes]),filename);form.set("title",filename);form.set("operationId",filename);
+      const uploaded = await fetch(`${base}/fixture/resources`,{method:"POST",headers:{origin:base},body:form});
+      const data = await uploaded.json();assert.equal(uploaded.status,201,JSON.stringify(data));
+      const toolRead = await client.callTool({name:"get_study_resource",arguments:{resourceId:data.resource.resourceId}});
+      assert.equal(toolRead.isError,undefined,JSON.stringify(toolRead));
+      if(filename.endsWith("pdf")) assert.match(toolRead.structuredContent.fragment?.text??JSON.stringify(toolRead),/Synthetic complete PDF text/);
+      if(filename.endsWith("html")) assert.match(toolRead.structuredContent.fragment.text,/Collapsed but preserved/);
+      if(filename.endsWith("png")) {const image=await client.callTool({name:"get_study_resource_image",arguments:{resourceId:data.resource.resourceId}});assert.deepEqual(Buffer.from(image.content.find(c=>c.type==="image").data,"base64"),bytes);}
+      const original = await fetch(`${base}/fixture/resources?resourceId=${data.resource.resourceId}&original=1`);
+      assert.deepEqual(Buffer.from(await original.arrayBuffer()),bytes);
+    }
+    const rejectedOrigin = await fetch(`${base}/fixture/resources`,{method:"POST",headers:{origin:"https://different.test"},body:"bad"});
+    assert.equal(rejectedOrigin.status,403);
     const codingQuestion = await client.callTool({ name: "create_practice_question", arguments: { operationId: "synthetic-editor-question", specialty: "leetcode", title: "Synthetic editor exercise", prompt: "Return 42.\nExample: no input -> 42.", url: null } });
     const editor = await client.callTool({ name: "open_coding_editor", arguments: { questionId: codingQuestion.structuredContent.questionId, language: "java", diagramText: "input -> answer" } });
     assert.equal(editor.isError, undefined, JSON.stringify(editor));
@@ -107,6 +127,16 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     assert.equal(catalog.isError, undefined);
     const created = await client.callTool({ name: "create_practice_question", arguments: { operationId: "synthetic-route-question", specialty: "system_design", title: "Synthetic bundled bank question", prompt: "Design a fictional queue.", url: null } });
     assert.equal(created.isError, undefined);
+    const sourceLink = await client.callTool({name:"link_study_resource",arguments:{resourceId:attachedId,target:"question",targetId:created.structuredContent.questionId,specialty:"system_design"}});
+    assert.equal(sourceLink.isError,undefined,JSON.stringify(sourceLink));
+    const current = await client.callTool({name:"query_practice_catalog",arguments:{specialty:"system_design",questionId:created.structuredContent.questionId}});
+    const todayData = current.structuredContent;
+    const planned = await client.callTool({name:"plan_today_practice",arguments:{mode:"exact_selection",expectedWorkbenchId:todayData.workbench.id,mutationId:"resource-practice-plan",destination:"standalone",selections:[{specialty:"system_design",questionId:created.structuredContent.questionId}]}});
+    assert.equal(planned.isError,undefined,JSON.stringify({current:todayData,planned}));
+    const activity = planned.structuredContent.authoritative.snapshot.activities.find(a=>a.questionId===created.structuredContent.questionId);
+    assert.ok(activity,JSON.stringify(planned.structuredContent));
+    const activityLink=await client.callTool({name:"link_study_resource",arguments:{resourceId:attachedId,target:"activity",targetId:activity.id}});
+    assert.equal(activityLink.isError,undefined,JSON.stringify(activityLink));
     const search = await client.callTool({ name: "search", arguments: { query: "bundled" } });
     assert.equal(search.structuredContent.results.length, 1);
     const fetched = await client.callTool({ name: "fetch", arguments: { id: search.structuredContent.results[0].id } });
