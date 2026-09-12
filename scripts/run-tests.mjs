@@ -12,7 +12,7 @@ const explicit = process.argv.slice(2).filter((arg) => arg !== "--fast" && arg !
 const files = explicit.length ? explicit : (await readdir(new URL("../tests/", import.meta.url)))
   .filter((name) => name.endsWith(".test.mjs"))
   .filter((name) => !integration || name.endsWith(".integration.test.mjs"))
-  .filter((name) => !fast || (!name.endsWith(".integration.test.mjs") && name !== "rendered-html.test.mjs"))
+  .filter((name) => !fast || (!name.endsWith(".integration.test.mjs") && !name.endsWith(".bundle.test.mjs") && name !== "rendered-html.test.mjs"))
   .sort()
   .map((name) => `tests/${name}`);
 if (!files.length) throw new Error("No test files selected.");

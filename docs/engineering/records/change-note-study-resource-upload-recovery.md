@@ -25,7 +25,7 @@ supersedes: []
 learningRefs: []
 diagrams: []
 sources: [{"label":"Issue #475","url":"https://github.com/Vinosaamaa/interview-arc/issues/475","kind":"issue"}]
-verification: {"state":"verified","evidenceRefs":["tests/study-resource-website.integration.test.mjs","tests/study-resource-uploader.test.mjs","tests/chatgpt-connector.integration.test.mjs"]}
+verification: {"state":"verified","evidenceRefs":["tests/study-resource-website.bundle.test.mjs","tests/study-resource-uploader.test.mjs","tests/chatgpt-connector.integration.test.mjs"]}
 visibility: public-safe
 publicationEligibility: eligible
 issue: 475

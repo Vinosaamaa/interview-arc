@@ -109,7 +109,7 @@ jobs:
         run: |
           pnpm build
           pnpm test:fast
-          node --experimental-strip-types --test tests/rendered-html.test.mjs
+          node --experimental-strip-types --test tests/rendered-html.test.mjs tests/study-resource-website.bundle.test.mjs
       - name: Package the validated Worker
         run: tar -cf validated-worker.tar dist .cache/eslint
       - name: Retain the validated Worker
