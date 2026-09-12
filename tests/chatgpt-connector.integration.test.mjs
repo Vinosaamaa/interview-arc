@@ -137,6 +137,12 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     assert.ok(activity,JSON.stringify(planned.structuredContent));
     const activityLink=await client.callTool({name:"link_study_resource",arguments:{resourceId:attachedId,target:"activity",targetId:activity.id}});
     assert.equal(activityLink.isError,undefined,JSON.stringify(activityLink));
+    const lesson = await client.callTool({name:"save_learning_lesson_revision",arguments:{operationId:"resource-lesson-create",expectedRevision:0,authorization:"learning_specialist",scope:{kind:"quick_study"},lesson:{lessonId:"resource-quick-study",state:"active",title:"Synthetic source study",objective:"Read the exact attached source.",sections:[{sectionId:"source",heading:"Original source",body:"Exact ChatGPT attachment content."}],checkpoints:[{checkpointId:"read-source",label:"Read source",description:"Identify the exact source sentence.",required:true}],sourcePins:[{kind:"owner_provided",title:"Chat attached original",path:attachedId,recordId:attachedId}]}}});
+    assert.equal(lesson.isError,undefined,JSON.stringify(lesson));
+    const lessonLink=await client.callTool({name:"link_study_resource",arguments:{resourceId:attachedId,target:"lesson",targetId:"resource-quick-study",revision:1}});
+    assert.equal(lessonLink.isError,undefined,JSON.stringify(lessonLink));
+    const learnSession=await client.callTool({name:"create_learning_session",arguments:{operationId:"resource-learning-session",sessionId:"resource-study-session",authorization:"learning_specialist",scope:{kind:"quick_study"},lessonId:"resource-quick-study",lessonRevision:1}});
+    assert.equal(learnSession.isError,undefined,JSON.stringify(learnSession));
     const search = await client.callTool({ name: "search", arguments: { query: "bundled" } });
     assert.equal(search.structuredContent.results.length, 1);
     const fetched = await client.callTool({ name: "fetch", arguments: { id: search.structuredContent.results[0].id } });
