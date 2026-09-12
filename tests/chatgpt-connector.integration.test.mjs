@@ -65,6 +65,18 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     assert.equal(names.includes("register_specialist_task"), false);
     assert.equal(names.includes("create_loop"), false);
     assert.equal(names.includes("delete_typed_practice_exchange"), false);
+    const lectureInput = { lectureId: "synthetic-professor", title: "Synthetic Professor lesson", sources: [{ label: "Reference", url: "https://example.com/reference" }], sections: [{ id: "intro", title: "First principles", text: "Teach this complete synthetic section faithfully." }] };
+    const lectureSaved = await client.callTool({ name: "save_practice_lecture", arguments: lectureInput });
+    assert.equal(lectureSaved.isError, undefined, JSON.stringify(lectureSaved));
+    assert.equal((await client.callTool({ name: "save_practice_lecture", arguments: lectureInput })).structuredContent.duplicate, true);
+    const lectureRead = await client.callTool({ name: "get_practice_lecture", arguments: { lectureId: lectureInput.lectureId } });
+    assert.equal(lectureRead.structuredContent.fragment.text, lectureInput.sections[0].text);
+    assert.equal(lectureRead.structuredContent.fingerprint, lectureSaved.structuredContent.fingerprint);
+    const lecturePosition = { lectureId: lectureInput.lectureId, operationId: "position-one", expectedRevision: 0, chunkIndex: 0, offsetSeconds: 0, characterOffset: 12 };
+    assert.equal((await client.callTool({ name: "save_lecture_position", arguments: lecturePosition })).structuredContent.revision, 1);
+    assert.equal((await client.callTool({ name: "save_lecture_position", arguments: lecturePosition })).structuredContent.duplicate, true);
+    assert.equal((await client.callTool({ name: "save_lecture_position", arguments: { ...lecturePosition, operationId: "stale-position" } })).isError, true);
+    assert.equal((await client.callTool({ name: "list_practice_lectures", arguments: {} })).structuredContent.lectures[0].lectureId, lectureInput.lectureId);
     const coaching = await client.callTool({ name: "get_practice_coaching_guide", arguments: { specialty: "system-design" } });
     assert.equal(coaching.isError, undefined);
     for (const document of [...coaching.structuredContent.requiredDocuments, ...coaching.structuredContent.reviewDocuments]) {

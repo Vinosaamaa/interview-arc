@@ -23,12 +23,12 @@ capabilities: ["continuous-prepared-lectures"]
 amends: []
 supersedes: []
 learningRefs: []
-sources: [{"label": "Issue #473", "url": "https://github.com/Vinosaamaa/interview-arc/issues/473", "kind": "issue"}, {"label": "OpenAI Speech guide", "url": "https://developers.openai.com/api/docs/guides/text-to-speech", "kind": "documentation"}]
+sources: [{"label": "Issue #473", "url": "https://github.com/Vinosaamaa/interview-arc/issues/473", "kind": "issue"}, {"label": "PR #474", "url": "https://github.com/Vinosaamaa/interview-arc/pull/474", "kind": "pull-request"}]
 verification: {"state":"verified","evidenceRefs":["tests/professor-lectures.test.mjs","docs/contracts/professor-lectures.md"]}
 visibility: public-safe
 publicationEligibility: eligible
 issue: 473
-pr: null
+pr: 474
 release: null
 run: null
 ---
