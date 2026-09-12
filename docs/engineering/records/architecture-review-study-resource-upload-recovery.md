@@ -1,9 +1,9 @@
 ---
 schemaVersion: 1
-id: change-note-study-resource-upload-recovery
+id: architecture-review-study-resource-upload-recovery
 revision: 1
-type: change-note
-status: proposed
+type: architecture-review
+status: accepted
 title: Restore large originals and explicit ChatGPT file selection
 repository: interview-arc
 capabilityIds: ["learning-workspace"]
