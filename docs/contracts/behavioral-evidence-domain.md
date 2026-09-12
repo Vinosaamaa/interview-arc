@@ -34,7 +34,11 @@ filesystem inspection; a filesystem refresh reports them as not checked but
 does not overwrite state owned by their connector. Repeated unchanged refreshes
 do not rewrite timestamps. Sync preparation includes revisions only for
 `available` sources whose connector state is `current` or `changed`, so stale
-non-filesystem metadata cannot enter a plan. Blocked, unknown, or
+non-filesystem metadata cannot enter a plan. If a connector-owned record still
+says `available` while its refresh state says `not_checked`, the remote-safe
+snapshot is downgraded to `not_checked` and omits stale revision and inspection
+fields; immutable evidence already pinned to an historical source-set revision
+remains replayable. Blocked, unknown, or
 authorization-required sources are blocked without inspection.
 
 `pin-provenance` binds each remote-eligible canonical observation to the exact
@@ -43,7 +47,9 @@ remote-material content. Existing D1 identities must be migrated from an
 ignored owner-private snapshot of their authoritative `evidenceId` and
 `sourceRevision`; unsynced identities may pin the current authorized source
 set. The command rejects unknown remote identities, conflicting revisions, and
-material edits under a pinned evidence ID.
+material edits under a pinned evidence ID. A valid historical pin remains
+replayable if its current source later becomes unavailable; current source
+availability is required only to derive a new source-set revision.
 
 `prepare-sync` accepts only typed `kind: evidence` candidates. Each candidate
 projects exactly one canonical pending evidence record and one or more stable

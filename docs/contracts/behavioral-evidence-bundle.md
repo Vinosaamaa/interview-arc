@@ -157,7 +157,10 @@ already used by D1, and `immutableContentFingerprint`, the digest of every
 remote-material evidence field. A later source refresh changes the source
 registry revision but never either evidence pin. A material re-audit must create
 a replacement evidence ID and use the explicit owner-reviewed supersession
-operation; editing a pinned observation in place fails locally.
+operation; editing a pinned observation in place fails locally. Once both pins
+are valid, replaying that historical observation does not depend on the source
+remaining currently available. Current availability remains mandatory when
+deriving a new source-set pin.
 
 Legacy bundles use `pin-provenance` once before their next sync. When an
 evidence identity already exists in D1, provide an ignored, owner-private remote
@@ -214,9 +217,14 @@ refresh state without printing locators; it leaves remote and conversation
 state to their owning connectors, and unchanged non-filesystem sources do not
 rewrite project or manifest timestamps. `pin-provenance` is the explicit
 migration/new-observation boundary; omit `--remote-snapshot` only when every
-newly pinned identity is known not to exist in D1. `prepare-sync` accepts a source
-revision only when its state is `available` and `current` or `changed`, and it
-fails when any pending evidence is uncovered; otherwise it writes an ignored `sync/plan.json`
+newly pinned identity is known not to exist in D1. `prepare-sync` projects a
+current source revision only when that source is `available` and `current` or
+`changed`. A connector-owned source still marked `available` after its refresh
+state becomes `not_checked` is projected as `not_checked` without stale revision
+or inspection metadata. An already-pinned evidence observation replays its
+historical source revision even when the source is now unavailable or not
+checked. It fails when any pending
+evidence is uncovered; otherwise it writes an ignored `sync/plan.json`
 containing only display-safe source snapshots and explicit typed candidate
 writes. It never calls MCP itself, uploads to R2, or treats a generated plan as
 a saved receipt.
