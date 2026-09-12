@@ -27,6 +27,10 @@ sources: [{"label":"Issue #473","url":"https://github.com/Vinosaamaa/interview-a
 verification: {"state":"verified","evidenceRefs":["tests/lecture-device-speech.test.mjs","docs/contracts/professor-lectures.md"]}
 visibility: public-safe
 publicationEligibility: eligible
+issue: 473
+pr: 479
+release: null
+run: null
 ---
 # Read prepared lectures with free device-local speech
 
