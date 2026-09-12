@@ -4,6 +4,10 @@ required = false
 url = "https://limitless-mcp.vinosama.workers.dev/mcp"
 bearer_token_env_var = "INTERVIEW_ARC_MCP_TOKEN"
 enabled_tools = [
+  "list_practice_lectures",
+  "save_practice_lecture",
+  "get_practice_lecture",
+  "save_lecture_position",
   "get_practice_interaction_mode",
   "set_practice_interaction_mode",
   "save_practice_exchange",
@@ -113,6 +117,8 @@ enabled_tools = [
   "get_practice_coaching_guide",
   "publish_practice_solutions",
   "get_practice_solution_batch",
+  "open_practice_lecture_player",
+  "generate_lecture_audio_section",
 ]
 startup_timeout_sec = 15.0
 tool_timeout_sec = 60.0

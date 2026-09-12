@@ -5,7 +5,9 @@ import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 // The authenticated ChatGPT surface reuses the existing practice handlers.
 // New tools are excluded until explicitly reviewed for this connection.
 export const CHATGPT_PRACTICE_TOOLS = new Set([
+  "open_practice_lecture_player", "generate_lecture_audio_section",
   "get_practice_coaching_guide",
+  "list_practice_lectures", "save_practice_lecture", "get_practice_lecture", "save_lecture_position",
   "open_coding_editor", "get_coding_draft", "save_coding_draft", "submit_coding_draft", "get_coding_submission",
   "read_excalidraw_link",
   "get_leetcode_connection", "get_leetcode_problem", "get_leetcode_recent_submissions", "get_leetcode_submission", "get_leetcode_editorial",

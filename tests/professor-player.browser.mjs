@@ -1,0 +1,57 @@
+import { chromium } from 'playwright-core';
+import assert from 'node:assert/strict';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { runMcpCommand } from './helpers/mcp-worker-harness.mjs';
+const base=process.env.ARC_LECTURE_BASE_URL ?? 'http://127.0.0.1:3013';
+if (!['127.0.0.1','localhost'].includes(new URL(base).hostname)) throw new Error('Synthetic lecture QA requires a local server.');
+await mkdir('.cache/lecture',{recursive:true});
+// Run against the local development server after its normal migrations/import.
+// Synthetic fixtures stay in local D1/R2 and never require production access.
+const project=fileURLToPath(new URL('..',import.meta.url));
+const wrangler=fileURLToPath(new URL('../node_modules/.bin/wrangler',import.meta.url));
+const config=fileURLToPath(new URL('../wrangler.dev.jsonc',import.meta.url));
+const input={lectureId:'browser-synthetic',title:'Synthetic continuous playback check',sources:[{label:'Synthetic public reference',url:'https://example.com/reference'}],sections:[{id:'first',title:'First section',text:'This synthetic script verifies the player.'},{id:'second',title:'Second section',text:'This second section verifies continuous playback.'}]};
+const saved=await fetch(`${base}/api/lectures`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'save',input})});
+assert.equal(saved.status,200,'save private synthetic script through the real route');
+const pcm=join(project,'.cache/lecture/synthetic.pcm'),sql=join(project,'.cache/lecture/seed.sql');
+await writeFile(pcm,new Uint8Array(3*48000));
+for (const index of [0,1]) await runMcpCommand(wrangler,['r2','object','put',`interview-arc-audio-local/owner/lectures/browser-synthetic/${index}.pcm`,'--file',pcm,'--local','--config',config],project);
+await writeFile(sql,[0,1].map(i=>`INSERT OR REPLACE INTO professor_lecture_audio(owner_id,lecture_id,chunk_index,state,lease_id,lease_until,object_key,size_bytes,duration_seconds) VALUES('owner','browser-synthetic',${i},'ready','fixture',0,'owner/lectures/browser-synthetic/${i}.pcm',144000,3);`).join('\n'));
+await runMcpCommand(wrangler,['d1','execute','DB','--local','--config',config,'--file',sql],project);
+const context = await chromium.launchPersistentContext(join(process.env.LOCALAPPDATA ?? join(homedir(),'AppData','Local'),'JobApplyChrome'), {...(process.env.ARC_BROWSER_EXECUTABLE ? {executablePath:process.env.ARC_BROWSER_EXECUTABLE} : {channel:'chrome'}),headless:true,viewport:{width:1365,height:1000},args:['--remote-debugging-port=9224']});
+try {
+ const reset=await fetch(`${base}/api/lectures?id=browser-synthetic`).then(r=>r.json());await fetch(`${base}/api/lectures`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'cursor',input:{lectureId:'browser-synthetic',operationId:crypto.randomUUID(),expectedRevision:reset.cursor.revision,chunkIndex:0,offsetSeconds:0,characterOffset:0}})});
+ const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto(`${base}/lectures?id=browser-synthetic`);
+ await page.getByRole('button',{name:'Play lecture',exact:true}).waitFor();
+ await page.screenshot({path:'.cache/lecture/desktop.png',fullPage:true});
+ await page.getByRole('button',{name:'Play lecture',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('audio')?.currentTime>3.3);
+ assert.equal(await page.locator('audio').evaluate(a=>a.paused),false,'continues across the boundary');
+ await page.getByRole('button',{name:'Pause lecture',exact:true}).click();
+ await page.waitForFunction(()=>[...document.querySelectorAll('[role=status]')].some(e=>e.textContent==='Position saved'));
+ const time=await page.locator('audio').evaluate(a=>a.currentTime);assert.ok(time>3);
+ await page.reload();await page.getByRole('button',{name:'Resume lecture',exact:true}).waitFor();
+ assert.ok(Math.abs(await page.locator('audio').evaluate(a=>a.currentTime)-time)<.15);
+ await page.getByRole('button',{name:'Resume lecture',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('audio')?.ended);
+ await page.getByLabel('Speed',{exact:false}).selectOption('1.25');
+ assert.equal(await page.locator('audio').evaluate(a=>a.playbackRate),1.25);
+ await page.getByRole('button',{name:'First section'}).click();
+ assert.ok(await page.locator('audio').evaluate(a=>a.currentTime)<1);
+ await page.setViewportSize({width:390,height:844});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'phone layout stays contained');
+ await page.screenshot({path:'.cache/lecture/mobile.png',fullPage:true});
+ const other=await context.newPage();await other.goto(`${base}/lectures?id=browser-synthetic`);
+ await other.getByRole('button',{name:/Play lecture|Resume lecture/}).waitFor();
+ await page.getByRole('button',{name:'Second section'}).click();
+ await page.waitForFunction(()=>[...document.querySelectorAll('[role=status]')].some(e=>e.textContent==='Position saved'));
+ await other.getByRole('button',{name:'Second section'}).click();
+ await other.getByRole('button',{name:'Reload saved position'}).waitFor();
+ assert.equal(await other.getByRole('button',{name:/Play lecture|Resume lecture/}).isDisabled(),true,'stale player blocks playback');
+ assert.deepEqual(errors,[]);
+ console.log(JSON.stringify({desktop:'pass',mobile390:'pass',continuousBoundary:'pass',pauseReloadResume:'pass',end:'pass',speed:'pass',chapterSeek:'pass',staleWriter:'pass',pageErrors:errors}));
+} finally { await context.close(); }
