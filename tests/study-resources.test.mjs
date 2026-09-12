@@ -2,9 +2,26 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
+import { boundedResourceStream } from '../db/study-resource-body.ts';
+import { resourceHash } from '../db/study-resource-policy.ts';
 import { saveStudyResource, getStudyResource, searchStudyResources, readStudyOriginal, linkStudyResource } from '../db/study-resources.ts';
 import { registerStudyResourceTools } from '../mcp-worker/study-resource-tools.ts';
 import { resourceText, resourceHtml, resourcePng, resourcePdf } from './fixtures/study-resource-content.mjs';
+test('upload stream preserves bytes at the limit and rejects oversized input; hashes respect view boundaries', async () => {
+  const bytes = new Uint8Array([90, 1, 2, 3, 91]);
+  const view = bytes.subarray(1, 4);
+  assert.equal(await resourceHash(view), await resourceHash(new Uint8Array([1, 2, 3])));
+  const allowed = boundedResourceStream(new Response(view).body, 3);
+  assert.deepEqual(new Uint8Array(await new Response(allowed.stream).arrayBuffer()), view);
+  assert.equal(allowed.exceeded(), false);
+  let cancelled = false;
+  const source = new ReadableStream({ pull(controller) { controller.enqueue(new Uint8Array([1, 2])); }, cancel() { cancelled = true; } });
+  const rejected = boundedResourceStream(source, 3);
+  await assert.rejects(new Response(rejected.stream).arrayBuffer(), /exceeds/);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(rejected.exceeded(), true);
+  assert.equal(cancelled, true);
+});
 function database(t) {
   const sqlite = new DatabaseSync(':memory:');
   t.after(() => sqlite.close());

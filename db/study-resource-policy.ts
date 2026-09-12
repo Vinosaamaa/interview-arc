@@ -28,7 +28,12 @@ export class ResourceError extends Error {
   constructor(message: string, status = 400) { super(message); this.status = status; }
 }
 export async function resourceHash(bytes: Uint8Array) {
-  return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", Uint8Array.from(bytes).buffer)), n => n.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", resourceByteView(bytes))), n => n.toString(16).padStart(2, "0")).join("");
+}
+export function resourceByteView(bytes: Uint8Array) {
+  return bytes.buffer instanceof ArrayBuffer
+    ? new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    : Uint8Array.from(bytes);
 }
 export function resourceChunks(extraction: ResourceExtraction) {
   const chunks: { ordinal: number; location: string; offset: number; text: string }[] = [];

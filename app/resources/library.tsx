@@ -8,7 +8,7 @@ import { pdfPageImages } from "./pdf-pages";
 import "./resources.css";
 
 type Reading = { resource: StudyResource; fragment: { location: string; text: string; ordinal: number } | null; nextChunk: number | null; readingCopies: { resourceId: string; page: number }[] };
-type Upload = { file: File; operationId: string; state: string; resource?: StudyResource };
+type Upload = { file: File | null; filename: string; operationId: string; state: string; resource?: StudyResource };
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   const data = await response.json() as T & { error?: string };
@@ -25,12 +25,28 @@ export default function ResourceLibrary() {
   const [jobs, setJobs] = useState<Upload[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [notice, setNotice] = useState(""), [prompt, setPrompt] = useState("");
   const [ready, setReady] = useState(false);
-  const selection = useRef(0);
+  const selection = useRef(0), searchRevision = useRef(0), displayedQuery = useRef(""), loadingOffsets = useRef(new Set<number>());
   const load = useCallback(async (offset = 0, search = "") => {
-    const data = await request<{ resources: StudyResource[]; nextOffset: number | null }>(`/api/study-resources?offset=${offset}&query=${encodeURIComponent(search)}`);
-    setItems(old => offset ? [...old, ...data.resources] : data.resources); setNextOffset(data.nextOffset);
+    const revision = offset === 0 ? ++searchRevision.current : searchRevision.current;
+    if (offset === 0) { displayedQuery.current = search; loadingOffsets.current.clear(); }
+    else if (search !== displayedQuery.current || loadingOffsets.current.has(0) || loadingOffsets.current.has(offset)) return;
+    loadingOffsets.current.add(offset);
+    try {
+      const data = await request<{ resources: StudyResource[]; nextOffset: number | null }>(`/api/study-resources?offset=${offset}&query=${encodeURIComponent(search)}`);
+      if (revision !== searchRevision.current) return;
+      setItems(old => offset ? [...old, ...data.resources] : data.resources); setNextOffset(data.nextOffset);
+    } catch (e) { if (revision === searchRevision.current) throw e; }
+    finally { if (revision === searchRevision.current) loadingOffsets.current.delete(offset); }
   }, []);
-  useEffect(() => { let active = true; request<{ resources: StudyResource[]; nextOffset: number | null }>("/api/study-resources").then(data => { if(active) { setItems(data.resources); setNextOffset(data.nextOffset); setReady(true); } }).catch(e => { if(active) { setError(e.message); setReady(true); } }); return () => { active = false; }; }, []);
+  useEffect(() => {
+    let active = true; const revision = searchRevision.current;
+    request<{ resources: StudyResource[]; nextOffset: number | null }>("/api/study-resources").then(data => {
+      if (!active) return;
+      setReady(true);
+      if (revision === searchRevision.current) { setItems(data.resources); setNextOffset(data.nextOffset); }
+    }).catch(e => { if (active) { if (revision === searchRevision.current) setError(e.message); setReady(true); } });
+    return () => { active = false; };
+  }, []);
   async function open(resource: StudyResource, chunk = 0) {
     const ticket = ++selection.current; setError("");
     try {
@@ -41,15 +57,16 @@ export default function ResourceLibrary() {
   async function run(queue: Upload[]) {
     setBusy(true); setError("");
     for (const job of queue) {
-      if (job.state === "Saved") continue;
+      if (job.state === "Saved" || !job.file) continue;
+      const file = job.file;
       const update = (state: string) => { job.state = state; setJobs([...queue]); };
       try {
         update("Saving original…");
-        job.resource ??= await upload(job.file, job.file.name, job.file.name, job.operationId);
-        if (new TextDecoder().decode(new Uint8Array(await job.file.slice(0, 5).arrayBuffer())) === "%PDF-") {
-          await preparePdf(job.file, job.resource, update);
+        job.resource ??= await upload(file, file.name, file.name, job.operationId);
+        if (new TextDecoder().decode(new Uint8Array(await file.slice(0, 5).arrayBuffer())) === "%PDF-") {
+          await preparePdf(file, job.resource, update);
         }
-        update("Saved");
+        job.file = null; update("Saved");
       } catch (e) { update((e as Error).message); }
     }
     setBusy(false); await load(0, query).catch(e => setError(e.message));
@@ -72,8 +89,8 @@ export default function ResourceLibrary() {
   }
   return <main className="resources-page">
     <header><Link href="/">← Interview Arc</Link><p className="resource-eyebrow">YOUR STUDY LIBRARY</p><h1>Keep the whole source.</h1><p>Upload once. Read here, or ask connected ChatGPT to teach and practise from your material.</p></header>
-    <section className="resource-upload" aria-labelledby="upload-title"><div><h2 id="upload-title">Add your files</h2><p>HTML, PDF, TXT, Markdown, images and other files. Originals stay intact. Up to 25 MB per file.</p><p className="resource-muted">Updated material is a new upload; earlier originals remain available. PDF page images are prepared here for visual reading.</p></div><label className="resource-upload-button">Choose files<input type="file" multiple disabled={busy || !ready} onChange={e => { const queue = Array.from(e.target.files ?? []).map(file => ({ file, operationId: "upload-" + crypto.randomUUID(), state: "Waiting" })); setJobs(queue); void run(queue); e.target.value = ""; }} /></label></section>
-    {jobs.length > 0 && <section aria-label="Upload progress"><ul className="resource-jobs">{jobs.map(job => <li key={job.operationId}><strong>{job.file.name}</strong><span role="status">{job.state}</span></li>)}</ul>{!busy && jobs.some(j => j.state !== "Saved") && <button onClick={() => void run(jobs)}>Retry unfinished uploads</button>}</section>}
+    <section className="resource-upload" aria-labelledby="upload-title"><div><h2 id="upload-title">Add your files</h2><p>HTML, PDF, TXT, Markdown, images and other files. Originals stay intact. Up to 25 MB per file.</p><p className="resource-muted">Updated material is a new upload; earlier originals remain available. PDF page images are prepared here for visual reading.</p></div><label className="resource-upload-button">Choose files<input type="file" multiple disabled={busy || !ready} onChange={e => { const queue = Array.from(e.target.files ?? []).map(file => ({ file, filename: file.name, operationId: "upload-" + crypto.randomUUID(), state: "Waiting" })); setJobs(queue); void run(queue); e.target.value = ""; }} /></label></section>
+    {jobs.length > 0 && <section aria-label="Upload progress"><ul className="resource-jobs">{jobs.map(job => <li key={job.operationId}><strong>{job.filename}</strong><span role="status">{job.state}</span></li>)}</ul>{!busy && jobs.some(j => j.state !== "Saved") && <button onClick={() => void run(jobs)}>Retry unfinished uploads</button>}</section>}
     <p role="alert" className="resource-error">{error}</p><p role="status">{notice}</p>
     <div className="resource-columns"><aside><form onSubmit={e => { e.preventDefault(); load(0, query).catch(e => setError(e.message)); }}><label htmlFor="resource-search">Find in your library</label><div className="resource-actions"><input id="resource-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Title or text phrase" /><button>Search</button></div></form>
       <ul className="resource-list">{items.map(item => <li key={item.resourceId}><button aria-pressed={reading?.resource.resourceId === item.resourceId} onClick={() => void open(item)}><strong>{item.title}</strong><small>{Math.ceil(item.sizeBytes / 1024)} KB · {item.chunkCount ? `${item.chunkCount} reading fragments` : "Original file"}</small></button></li>)}</ul>

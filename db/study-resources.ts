@@ -1,6 +1,6 @@
 import { extractStudyResource } from "./study-resource-extraction.ts";
 import { readChatgptBank } from "./chatgpt-bank.ts";
-import { MAX_RESOURCE_BYTES, ResourceError, resourceHash, resourceChunks, resourceUploadSchema, resourceLinkSchema, type ResourceLink } from "./study-resource-policy.ts";
+import { MAX_RESOURCE_BYTES, ResourceError, resourceByteView, resourceHash, resourceChunks, resourceUploadSchema, resourceLinkSchema, type ResourceLink } from "./study-resource-policy.ts";
 
 export type ResourceDatabase = Pick<D1Database, "prepare" | "batch">;
 export type ResourceBucket = Pick<R2Bucket, "get" | "put" | "head">;
@@ -42,7 +42,7 @@ export async function saveStudyResource(db: ResourceDatabase, bucket: ResourceBu
   if (prior && prior.fingerprint !== fingerprint) throw new ResourceError("This upload identity already has different content. Use a new upload for the changed file.", 409);
   const key = `study-resources/${await hashJson(owner)}/${sourceSha256}`;
   // Replaying exact bytes repairs missing storage before returning success.
-  await bucket.put(key, Uint8Array.from(file.bytes).buffer, { httpMetadata: { contentType: "application/octet-stream" }, sha256: sourceSha256 });
+  await bucket.put(key, resourceByteView(file.bytes), { httpMetadata: { contentType: "application/octet-stream" }, sha256: sourceSha256 });
   const stored = await bucket.get(key);
   if (!stored || stored.size !== file.bytes.length || await resourceHash(new Uint8Array(await stored.arrayBuffer())) !== sourceSha256) throw new ResourceError("Original file verification failed. Retry the same upload.", 503);
   if (prior) return { resource: metadata(prior), duplicate: true };

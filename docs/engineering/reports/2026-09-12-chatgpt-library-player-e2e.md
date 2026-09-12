@@ -41,3 +41,9 @@ lesson-revision link and a planned Learning Session. The website browser test
 passes original upload/download, full Markdown paging, saved HTML details, PDF
 page rendering and desktop/390px layouts. These observations remain local
 integration coverage; the actual ChatGPT rows above are still pending.
+
+The review regression check holds an earlier search response until a later
+search has rendered, then confirms the earlier response cannot replace it.
+Upload-limit checks verify exact bytes at the limit, rejection and cancellation
+above the limit, and hashes of file views with nonzero offsets. The revised
+streaming upload path also passes the local Workers integration test.

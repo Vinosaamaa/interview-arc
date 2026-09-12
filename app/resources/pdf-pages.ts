@@ -12,8 +12,8 @@ export async function* pdfPageImages(file: Blob) {
       canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
       await page.render({ canvas, viewport }).promise;
       const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(Error("Page image could not be rendered.")), "image/png"));
-      yield { page: pageNumber, total: pdf.numPages, blob };
       canvas.width = 0; canvas.height = 0; page.cleanup();
+      yield { page: pageNumber, total: pdf.numPages, blob };
     }
   } finally { await pdf.loadingTask.destroy(); }
 }

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { ZodError } from "zod";
 import { resolveOwnerId } from "../../../db/owner";
+import { boundedResourceStream } from "../../../db/study-resource-body";
 import { MAX_RESOURCE_BYTES, ResourceError, resourceIdSchema } from "../../../db/study-resource-policy";
 import { getStudyResource, linkStudyResource, readStudyOriginal, resourceImageType, saveStudyResource, searchStudyResources } from "../../../db/study-resources";
 
@@ -26,9 +27,15 @@ export async function POST(request: Request) {
       return Response.json(await linkStudyResource(env.DB,owner,value),{headers});
     }
     if(!type.startsWith("multipart/form-data;"))throw new ResourceError("Choose a file to upload.");
-    const body=await boundedResourceBody(request,MAX_RESOURCE_BYTES+12*1024*1024);
-    const form=await new Request(request.url,{method:"POST",headers:{"content-type":type},body}).formData();
+    const limit=MAX_RESOURCE_BYTES+1024*1024;
+    if(!request.body)throw new ResourceError("Upload body is missing.");
+    if(Number(request.headers.get("content-length"))>limit)throw new ResourceError("Upload exceeds the supported size.",413);
+    const limited=boundedResourceStream(request.body,limit);
+    let form: FormData;
+    try { form=await new Request(request.url,{method:"POST",headers:{"content-type":type},body:limited.stream}).formData(); }
+    catch(e) { if(limited.exceeded())throw new ResourceError("Upload exceeds the supported size.",413); throw e; }
     const file=form.get("file");if(!(file instanceof File))throw new ResourceError("Choose a file to upload.");
+    if(!file.size||file.size>MAX_RESOURCE_BYTES)throw new ResourceError("Choose a non-empty file up to 25 MB.",413);
     const result=await saveStudyResource(env.DB,env.AUDIO,owner,{operationId:form.get("operationId"),title:form.get("title")},
       {name:file.name,bytes:new Uint8Array(await file.arrayBuffer())});
     return Response.json(result,{status:result.duplicate?200:201,headers});

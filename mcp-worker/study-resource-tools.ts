@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { boundedResourceStream } from "../db/study-resource-body.ts";
 import { ResourceError, MAX_RESOURCE_BYTES, resourceIdSchema, resourceLinkSchema, resourceUploadSchema } from "../db/study-resource-policy.ts";
 import { getStudyResource, linkStudyResource, readStudyOriginal, resourceImageType, saveStudyResource, searchStudyResources, type ResourceBucket, type ResourceDatabase } from "../db/study-resources.ts";
 
@@ -37,9 +38,8 @@ export function registerStudyResourceTools(server:McpServer,db:ResourceDatabase,
     const response=await fetch(url,{redirect:"error",signal:AbortSignal.timeout(30000)});
     if(!response.ok||!response.body)throw new ResourceError("Attached file download failed. Attach it again and retry with the same upload identity.");
     if(Number(response.headers.get("content-length"))>MAX_RESOURCE_BYTES)throw new ResourceError("File exceeds 25 MB.",413);
-    const chunks:Uint8Array[]=[];let size=0;const reader=response.body.getReader();
-    try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>MAX_RESOURCE_BYTES)throw new ResourceError("File exceeds 25 MB.",413);chunks.push(value);}}catch(e){await reader.cancel().catch(()=>undefined);throw e;}finally{reader.releaseLock();}
-    const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+    const limited=boundedResourceStream(response.body,MAX_RESOURCE_BYTES);
+    const bytes=new Uint8Array(await new Response(limited.stream).arrayBuffer());
     return saveStudyResource(db,bucket,owner,{operationId:v.operationId,title:v.title},{name:v.file.file_name??({"text/plain":"resource.txt","text/markdown":"resource.md","text/html":"resource.html","application/pdf":"resource.pdf","application/json":"resource.json"}[v.file.mime_type??""]??"resource.bin"),bytes});
   }));
 }
