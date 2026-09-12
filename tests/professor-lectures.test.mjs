@@ -3,10 +3,20 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { saveLecture, readLecture, listLectures, saveLectureCursor } from '../db/lectures.ts';
-import { chunkLecture } from '../db/lecture-policy.ts';
+import { chunkLecture, lectureSectionsFromMarkdown } from '../db/lecture-policy.ts';
 import { generateLectureAudio } from '../db/lecture-audio.ts';
 import { openLecturePlayer, routeLectureMedia } from '../mcp-worker/lecture-player-tools.ts';
 import { lectureWavHeader, streamLecture } from '../db/lecture-stream.ts';
+
+test('script chapters preserve fenced code, nested shorter fences and unfinished examples', () => {
+  const example = '````md\n# A code example\n```\n## Still code\n````';
+  const source = '# First\nBefore\n' + example + '\nAfter\n## Second\n~~~text\n# Tilde example\n~~~\nDone';
+  const sections = lectureSectionsFromMarkdown(source);
+  assert.deepEqual(sections.map(s => s.title), ['First', 'Second']);
+  assert.equal(sections[0].text, 'Before\n' + example + '\nAfter');
+  assert.equal(sections[1].text, '~~~text\n# Tilde example\n~~~\nDone');
+  assert.equal(lectureSectionsFromMarkdown('# Start\n```\n# Unfinished')[0].text, '```\n# Unfinished');
+});
 
 function database(t) {
   const sqlite = new DatabaseSync(':memory:');

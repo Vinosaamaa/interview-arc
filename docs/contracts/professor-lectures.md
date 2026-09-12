@@ -49,7 +49,7 @@ can lose the latest unconfirmed position. The UI must not label it saved.
 
 ## Audio preparation and playback
 
-Audio generation is an explicit website action using the deployment's Speech
+Audio generation is an explicit website or in-chat player action using the deployment's Speech
 configuration. The fixed provider endpoint receives only the selected script
 chunk and narration settings. A 180-second per-chunk lease excludes duplicate
 active requests. Failed parts can retry; ready private R2 objects are reused.
@@ -66,8 +66,9 @@ playback without transcoding infrastructure or client next-track callbacks.
 
 Audio cannot begin until every part is ready. Native audio controls plus Media
 Session handlers provide pause, seek and resume. Script word-count duration is
-an estimate; measured PCM duration is authoritative. A recording shorter than
-an hour is disclosed and requires an expanded script, never silence padding.
+an estimate; measured PCM duration is authoritative. A shorter recording is
+disclosed and remains playable. Meeting a one-hour request requires an expanded
+script or the in-chat player's disclosed fit-to-hour speed, never silence padding.
 Physical mobile background and lock-screen behavior require device acceptance.
 
 ## ChatGPT boundary

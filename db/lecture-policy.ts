@@ -25,6 +25,27 @@ export const lectureCursorSchema = z.strictObject({
 export type LectureInput = z.infer<typeof saveLectureSchema>;
 export type LectureCursorInput = z.infer<typeof lectureCursorSchema>;
 export type LectureChunk = { index: number; sectionId: string; sectionTitle: string; text: string };
+export function lectureSectionsFromMarkdown(script: string) {
+  const sections: LectureInput["sections"] = [];
+  let title = "Introduction", body: string[] = [], fence = "";
+  const append = () => {
+    const text = body.join("\n").trim();
+    if (text) sections.push({ id: `section-${sections.length + 1}`, title, text });
+    body = [];
+  };
+  for (const line of script.split(/\r?\n/)) {
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fence) {
+      body.push(line);
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = "";
+    } else if (marker && (marker[1][0] !== "`" || !marker[2].includes("`"))) {
+      fence = marker[1]; body.push(line);
+    } else if (/^#{1,3}\s/.test(line)) {
+      append(); title = line.replace(/^#{1,3}\s+/, "");
+    } else body.push(line);
+  }
+  append(); return sections;
+}
 export class LectureError extends Error {
   status: number;
   constructor(message: string, status = 409) { super(message); this.status = status; }
