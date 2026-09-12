@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { request } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -39,8 +40,19 @@ test('built website preserves large multipart originals and still enforces uploa
   const retry=await send(bytes,'large-original');
   assert.equal(retry.status,200);assert.equal((await retry.json()).resource.resourceId,saved.resource.resourceId);
   assert.equal((await send(bytes,'wrong-origin','https://unrelated.example')).status,403);
-  const oversized=await send(Buffer.alloc(25*1024*1024+1,37),'oversized-original');
-  assert.equal(oversized.status,413);assert.match((await oversized.json()).error,/25 MB|supported size/);
+  // The Worker rejects declared oversized bodies before consuming them. Node's
+  // fetch can race that response with its large request-body write (EPIPE), so
+  // inspect the actual HTTP response with a client that handles early responses.
+  const oversizedForm=new FormData();oversizedForm.set('file',new Blob([Buffer.alloc(25*1024*1024+1,37)]),'oversized.bin');
+  const encoded=new Response(oversizedForm),body=Buffer.from(await encoded.arrayBuffer());
+  const oversized=await new Promise((resolve,reject)=>{
+    let received=false;
+    const req=request(base+'/api/study-resources',{method:'POST',headers:{origin:base,'content-type':encoded.headers.get('content-type'),'content-length':body.length}},res=>{
+      received=true;const parts=[];res.on('data',part=>parts.push(part));res.on('error',reject);res.on('end',()=>resolve({status:res.statusCode,text:Buffer.concat(parts).toString()}));
+    });
+    req.on('error',error=>{if(!received)reject(error);});req.end(body);
+  });
+  assert.equal(oversized.status,413);assert.match(JSON.parse(oversized.text).error,/25 MB|supported size/);
   const list=await (await fetch(base+'/api/study-resources')).json();
   assert.equal(list.resources.length,1,'failed and retried uploads do not create extra resources');
 });
