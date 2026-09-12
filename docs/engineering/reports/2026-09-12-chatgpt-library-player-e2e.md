@@ -61,7 +61,9 @@ ChatGPT confirmed the configured state and attempted the existing short section
 once. The section is failed, with no ready audio. The server currently maps all
 HTTP 429 responses to a generic rate-limit message; the signed-in API billing
 page independently shows a free-trial account with zero remaining credit.
-Adding API credit is an external prerequisite. No paid credit purchase, audible
+The owner rejected purchasing credit and requires free speech. Device-local
+speech is now being investigated under #473; no further paid request is authorized.
+No paid credit purchase, audible
 playback, one-hour duration, mobile background playback or screen-lock acceptance
 has been completed.
 
