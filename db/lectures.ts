@@ -55,9 +55,18 @@ export async function saveLectureCursor(db: LectureDatabase, owner: string, valu
     if (replay.fingerprint !== fingerprint) throw new LectureError("This operation ID has different cursor content.");
     return { ...JSON.parse(replay.receipt), duplicate: true };
   }
-  const lecture = await readLecture(db, owner, input.lectureId, input.chunkIndex);
-  if (input.characterOffset > lecture.fragment.text.length) throw new LectureError("Reading position is outside this chunk.", 400);
-  const duration = lecture.chunks[input.chunkIndex].audio?.duration_seconds;
+  // Autosaves need only one bounded fragment, not the full script and every
+  // audio row. Keep frequent cursor validation independent of lecture length.
+  const chunk = await db.prepare(`SELECT json_extract(l.chunks,?) AS text,a.duration_seconds
+    FROM professor_lectures l LEFT JOIN professor_lecture_audio a
+    ON a.owner_id=l.owner_id AND a.lecture_id=l.lecture_id AND a.chunk_index=?
+    WHERE l.owner_id=? AND l.lecture_id=?`)
+    .bind(`$[${input.chunkIndex}].text`, input.chunkIndex, owner, input.lectureId)
+    .first<{ text: string | null; duration_seconds: number | null }>();
+  if (!chunk) throw new LectureError("Lecture not found.", 404);
+  if (chunk.text == null) throw new LectureError("Chunk is outside this lecture.", 400);
+  if (input.characterOffset > chunk.text.length) throw new LectureError("Reading position is outside this chunk.", 400);
+  const duration = chunk.duration_seconds;
   if (duration != null && input.offsetSeconds > duration) throw new LectureError("Playback position is outside this chunk.", 400);
   const receipt = { lectureId: input.lectureId, operationId: input.operationId, revision: input.expectedRevision + 1,
     chunkIndex: input.chunkIndex, offsetSeconds: input.offsetSeconds, characterOffset: input.characterOffset, duplicate: false };
