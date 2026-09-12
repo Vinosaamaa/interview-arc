@@ -1,3 +1,4 @@
+import { GET as readResourceRoute, POST as uploadResourceRoute } from "../../app/api/study-resources/route";
 // Synthetic authentication provider used only by the isolated local test.
 import worker from "../../mcp-worker/index";
 import { GET as readImportedPracticeRoute } from "../../app/api/chatgpt-practice/route";
@@ -33,6 +34,7 @@ function prepareSigningKey(db: D1Database) {
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  if (url === "https://files.oaiusercontent.com/synthetic-library.txt") return new Response("Exact ChatGPT attachment content.\n", { headers: { "Content-Type": "text/plain" } });
   if (url === `${issuer}/cdn-cgi/access/certs`) return Response.json({ keys: [{ ...publicKey, kid: "synthetic" }] });
   return originalFetch(input, init);
 };
@@ -40,6 +42,11 @@ const base64 = (value: string | Uint8Array) => btoa(typeof value === "string" ? 
 const syntheticWorker = {
   async fetch(request: Request, env: Parameters<typeof worker.fetch>[1], ctx: ExecutionContext) {
     await prepareSigningKey(env.DB);
+    if (new URL(request.url).pathname === "/fixture/resources") {
+      const headers = new Headers(request.headers); headers.set("x-interview-arc-authenticated-email", "synthetic@example.test");
+      const scoped = new Request(request, {headers});
+      return request.method === "POST" ? uploadResourceRoute(scoped) : readResourceRoute(scoped);
+    }
     if (new URL(request.url).pathname === "/fixture/lecture-audio") {
       const owner = await resolveOwnerId(new Request(request.url, { headers: { "x-interview-arc-authenticated-email": "synthetic@example.test" } }));
       if (request.method === "POST") return Response.json(await generateLectureAudio(env.DB, env.AUDIO, owner, "synthetic-professor", 0, "synthetic-only", async () => new Response(new Uint8Array(48000), { headers: { "content-type": "audio/pcm" } })));

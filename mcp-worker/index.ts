@@ -2,6 +2,7 @@ import { createMcpHandler } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ScopedMcpServer } from "./scoped-server";
 import { registerChatgptTools } from "./chatgpt-tools";
+import { registerStudyResourceTools } from "./study-resource-tools";
 import { registerLecturePlayerTools, routeLectureMedia } from "./lecture-player-tools";
 import { listLectures, readLecture, saveLecture, saveLectureCursor } from "../db/lectures";
 import { LectureError, lectureId, saveLectureSchema, lectureCursorSchema } from "../db/lecture-policy";
@@ -2636,6 +2637,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
   registerLeetcodeTools(server, env.AUDIO, ownerId);
   registerCodingTools(server, env.DB, env.AUDIO, ownerId);
   registerCoachingTools(server);
+  registerStudyResourceTools(server, env.DB, env.AUDIO, ownerId);
   registerLecturePlayerTools(server, env.DB, env.AUDIO, ownerId, env.OPENAI_API_KEY);
   registerDrawingTools(server, env.DB, env.AUDIO, ownerId);
 
