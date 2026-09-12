@@ -1,6 +1,12 @@
 import { access, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+export const TOOL_SOURCE_FILES = [
+  "index.ts", "editorial-tools.ts", "leetcode-tools.ts", "coding-tools.ts",
+  "drawing-tools.ts", "coaching-tools.ts", "solution-publication-tools.ts",
+  "study-resource-tools.ts", "lecture-player-tools.ts", "study-resource-uploader.ts",
+];
+
 const CONTRACT_FILES = [
   "AGENTS.md",
   "loops/AGENTS.md",
@@ -65,7 +71,7 @@ export async function validateMcpToolAllowlists({
     readFile(new URL(".codex/config.toml", repositoryRoot), "utf8"),
     ...CONTRACT_FILES.map((path) => readFile(new URL(path, repositoryRoot), "utf8")),
   ]);
-  const sharedSources = await Promise.all(["editorial-tools.ts", "leetcode-tools.ts", "coding-tools.ts", "drawing-tools.ts", "coaching-tools.ts", "solution-publication-tools.ts", "study-resource-tools.ts", "lecture-player-tools.ts"].map(name => readFile(new URL(`mcp-worker/${name}`, repositoryRoot), "utf8")));
+  const sharedSources = await Promise.all(TOOL_SOURCE_FILES.slice(1).map(name => readFile(new URL(`mcp-worker/${name}`, repositoryRoot), "utf8")));
   const registered = [...parseRegisteredTools(workerSource), ...sharedSources.flatMap(parseRegisteredTools)];
   const repositoryEnabled = parseEnabledTools(repositoryConfig);
   const registeredSet = new Set(registered);

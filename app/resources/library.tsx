@@ -11,7 +11,11 @@ type Reading = { resource: StudyResource; fragment: { location: string; text: st
 type Upload = { file: File | null; filename: string; operationId: string; state: string; resource?: StudyResource };
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
-  const data = await response.json() as T & { error?: string };
+  const data = await response.json().catch(() => {
+    throw Error(response.status === 413
+      ? "The server rejected the upload size. Your original is unchanged; retry after the upload limit is corrected."
+      : `The server returned an unreadable response (${response.status}). Retry the same upload.`);
+  }) as T & { error?: string };
   if (!response.ok) throw Error(data.error ?? "The request was not confirmed.");
   return data;
 }

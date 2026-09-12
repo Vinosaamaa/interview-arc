@@ -6,35 +6,18 @@ import {
   parseEnabledTools,
   parseRegisteredTools,
   validateMcpToolAllowlists,
+  TOOL_SOURCE_FILES,
 } from "../scripts/validate-mcp-tool-allowlist.mjs";
 
 const repositoryRoot = new URL("../", import.meta.url);
 
 test("the repository MCP allowlist matches the Worker registration catalog in order", async () => {
-  const [workerSource, editorialSource, leetcodeSource, codingSource, drawingSource, coachingSource, publicationSource, resourceSource, lectureSource, repositoryConfig] = await Promise.all([
-    readFile(new URL("mcp-worker/index.ts", repositoryRoot), "utf8"),
-    readFile(new URL("mcp-worker/editorial-tools.ts", repositoryRoot), "utf8"),
-    readFile(new URL("mcp-worker/leetcode-tools.ts", repositoryRoot), "utf8"),
-    readFile(new URL("mcp-worker/coding-tools.ts", repositoryRoot), "utf8"),
-    readFile(new URL("mcp-worker/drawing-tools.ts", repositoryRoot), "utf8"),
-    readFile(new URL("mcp-worker/coaching-tools.ts", repositoryRoot), "utf8"),
-    readFile(new URL("mcp-worker/solution-publication-tools.ts", repositoryRoot), "utf8"),
-    readFile(new URL("mcp-worker/study-resource-tools.ts", repositoryRoot), "utf8"),
-    readFile(new URL("mcp-worker/lecture-player-tools.ts", repositoryRoot), "utf8"),
+  const [sources, repositoryConfig] = await Promise.all([
+    Promise.all(TOOL_SOURCE_FILES.map(name => readFile(new URL(`mcp-worker/${name}`, repositoryRoot), "utf8"))),
     readFile(new URL(".codex/config.toml", repositoryRoot), "utf8"),
   ]);
 
-  assert.deepEqual(parseEnabledTools(repositoryConfig), [
-    ...parseRegisteredTools(workerSource),
-    ...parseRegisteredTools(editorialSource),
-    ...parseRegisteredTools(leetcodeSource),
-    ...parseRegisteredTools(codingSource),
-    ...parseRegisteredTools(drawingSource),
-    ...parseRegisteredTools(coachingSource),
-    ...parseRegisteredTools(publicationSource),
-    ...parseRegisteredTools(resourceSource),
-    ...parseRegisteredTools(lectureSource),
-  ]);
+  assert.deepEqual(parseEnabledTools(repositoryConfig), sources.flatMap(parseRegisteredTools));
 });
 
 test("the optional outer workspace shim stays aligned without making CI depend on it", async () => {

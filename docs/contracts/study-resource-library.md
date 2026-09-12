@@ -45,6 +45,13 @@ HTML is an attachment with a restrictive sandbox and `nosniff`; the reader never
 injects source HTML. Image responses require matching supported image signatures.
 ChatGPT upload uses `openai/fileParams` and bounded temporary HTTPS downloads from
 OpenAI file hosts. URLs, file IDs and credentials are not stored in the library.
+If automatic ChatGPT attachment handoff is unavailable, open
+`open_study_resource_uploader`. Its in-chat picker uses the host's authorized
+file selection/upload and temporary download APIs; it never invents a download
+URL from a mounted path. Widget-local retry state retains file handles and
+operation IDs, never download URLs or original bytes. Unsupported host file APIs
+remain an explicit limitation. Resource POSTs reach the bounded handler after
+Worker authentication, before the framework's smaller server-action body limit.
 
 D1 owns metadata, text fragments and links. Fragments are hash-scoped and staged
 before the final resource row makes them discoverable. A failed upload may leave

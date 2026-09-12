@@ -88,7 +88,7 @@ test('HTML preserves hidden detail/code, PDF preserves page text, binary origina
 });
 test('connector returns actual image/original bytes and links page copies only within owner', async t => {
  const { db }=database(t),r2=bucket(),tools=new Map();
- registerStudyResourceTools({registerTool(name,config,handler){tools.set(name,{config,handler});}},db,r2,'a');
+ registerStudyResourceTools({registerResource(){},registerTool(name,config,handler){tools.set(name,{config,handler});}},db,r2,'a');
  const saved=await saveStudyResource(db,r2,'a',input,{name:'page.png',bytes:resourcePng});
  const image=await tools.get('get_study_resource_image').handler({resourceId:saved.resource.resourceId});
  assert.equal(image.content[1].type,'image');assert.deepEqual(Buffer.from(image.content[1].data,'base64'),resourcePng);
@@ -102,5 +102,5 @@ test('connector returns actual image/original bytes and links page copies only w
  assert.equal((await getStudyResource(db,'a',parent.resource.resourceId)).readingCopies[0].resourceId,saved.resource.resourceId);
  assert.deepEqual(tools.get('save_study_resource_file').config._meta['openai/fileParams'],['file']);
  const denied=await tools.get('save_study_resource_file').handler({...input,file:{download_url:'https://example.test/private',file_id:'file',file_name:'note.txt'}});
- assert.equal(denied.isError,true);assert.match(denied.content[0].text,/not recognized/);
+ assert.equal(denied.isError,true);assert.match(denied.content[0].text,/supported file download/);
 });
