@@ -1,6 +1,6 @@
 # Practice with connected ChatGPT text and Live
 
-Guide version: **8**. Exchange version: **1**. Checked: **2026-09-10**.
+Guide version: **9**. Exchange version: **1**. Checked: **2026-09-12**.
 
 Connect Interview Arc once in ChatGPT Developer mode using the deployed
 `/chatgpt/mcp` endpoint and OAuth. Cloudflare Access supplies the usual Arc
@@ -33,6 +33,39 @@ Excalidraw tools, use the connected web chat; a drawing URL alone cannot enable
 missing tools. Never present a generated image as an interactive MCP canvas.
 
 ## Instructions for ChatGPT
+
+### One-hour Professor lectures
+
+- For an explicit one-hour teaching request, research the selected question and
+  prepare a complete original lecture before playback. Explain each term from
+  first principles, work through concrete numbers and examples, and connect
+  requirements, design choices, failure cases, and tradeoffs. An outline or a
+  short Solution Profile is not a one-hour lecture. Aim for about 7,200 spoken
+  words at a patient pace; word count gives an estimate, not measured duration.
+- Save ordered sections and verified source URLs with `save_practice_lecture`.
+  Preserve the returned lecture ID and fingerprint. Exact retries reuse the ID;
+  a revised script gets a new ID so saved positions and audio remain stable.
+  Private lecture content stays in Arc storage and never enters Git.
+- Return the authenticated player URL. The owner selects Generate audio there,
+  which sends the script to OpenAI Speech and privately stores the result.
+  The player serves all prepared sections as one seekable audio stream and
+  reports measured duration. If it is shorter than requested, disclose the gap
+  and prepare a fuller script; never pad with silence or claim an hour passed.
+- For Live in this chat, use `list_practice_lectures` and `get_practice_lecture`
+  to retrieve the same script and saved position. Read every needed chunk and
+  put the next section's text and teaching instructions in the conversation
+  before Voice when tool results may not reach it. Continue without gratuitous
+  check-in questions when the user requested a lecture, and yield when interrupted.
+- Save only a confirmed position with `save_lecture_position`. Never claim
+  word-accurate alignment from an audio timestamp. Explain that resuming from
+  audio in Live may repeat part of the current chunk. A stale revision requires
+  rereading the current position, not overwriting the other player or chat.
+- ChatGPT Voice may end a response before the lesson ends. A script, connector,
+  or prompt does not guarantee automatic new Voice turns while the user is
+  silent. Offer the continuous player for that requirement. Do not claim an
+  automatic microphone wake word, opening Live, or a cross-app audio handoff.
+  Lecture playback alone never starts or finishes an activity, saves a
+  practice transcript, or marks learning demonstrated.
 
 ### Prepare from real sources
 

@@ -114,6 +114,7 @@ export default function ChatgptPractice({ MarkdownBody, refreshKey }: { Markdown
   return <section className="chatgpt-practice" aria-label="ChatGPT practice">
     <details ref={editor} className="chatgpt-import-editor">
       <summary><span>ChatGPT practice</span><small>Bring your conversation back to Arc</small></summary>
+      <p><a href="/lectures">Professor lectures · continuous listening</a></p>
       <div className="chatgpt-import-flow">
         <div className="chatgpt-import-handoff"><h3>Take your questions with you</h3><p>Download your private bank, attach it in text ChatGPT with the guide, then switch to Live in that same chat. Download again when you want fresh progress.</p><div className="chatgpt-import-actions"><a href="/api/chatgpt-practice?bank=1&download=1" download>Download private bank</a><a href={guideUrl} target="_blank" rel="noreferrer">Open practice guide â†—</a></div><p className="chatgpt-import-note">Your bank file contains personal questions and progress. Keep it out of GitHub. Live uses the supplied snapshot; it does not continuously refresh Arc.</p></div>
         <div><h3>Bring the session back</h3><p>After Voice, ask text ChatGPT to export the session using the guide. Choose the JSON file or paste its contents below.</p>
