@@ -3,10 +3,11 @@
 Assessment: **2026-09-11**. Provider setup, account linking and connected-text
 practice reads/writes were verified in the
 [2026-09-10 release receipt](https://github.com/Vinosaamaa/interview-arc/issues/453#issuecomment-5626730580).
-The new Windows task currently receives `oauth_token_invalid_grant`; that
-connection requires reauthentication. Earlier acceptance does not establish
-that every later client session is connected. Physical Voice acceptance is
-still pending.
+The Windows connection's rejected OAuth grant was cleared by reconnecting on
+2026-09-11. Authenticated bank reads and complete specialist-guide retrieval
+then passed; see the [specialist verification report](../engineering/reports/2026-09-11-specialist-e2e-neetcode-150.md).
+That receipt covers this connection at the recorded time. Physical Voice
+acceptance is still pending.
 
 The intended daily flow is text preparation from the connected private bank,
 Live conversation in the same chat where supported, then direct text save.
