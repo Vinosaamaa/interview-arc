@@ -96,7 +96,7 @@ function ProfessorPlayer({ id }: { id: string }) {
           pending.current = { lectureId: id, operationId: crypto.randomUUID(), expectedRevision: revision.current,
             chunkIndex: index, offsetSeconds: Math.max(0, Math.min(remaining, value.chunks[index].audio?.duration_seconds ?? 1800)), characterOffset: 0 };
         }
-        if (mounted.current) setSaveStatus("Saving position�");
+        if (mounted.current) setSaveStatus("Saving position…");
         const receipt = await send<{ revision: number }>("cursor", pending.current, true);
         revision.current = receipt.revision; pending.current = null; lastSave.current = Date.now();
       } while (queued.current != null);
@@ -121,7 +121,7 @@ function ProfessorPlayer({ id }: { id: string }) {
       try { navigator.mediaSession.setActionHandler(name, handler); } catch { /* Older browsers support only a subset of actions. */ }
     };
     navigator.mediaSession.metadata = new MediaMetadata({ title: lecture.title, artist: "Interview Arc · AI-generated lecture" });
-    mediaHandler("play", () => { void audio.current?.play().catch(error => setError(error.message)); });
+    mediaHandler("play", () => { if (blocked.current) return; void audio.current?.play().catch(error => setError(error.message)); });
     mediaHandler("pause", () => audio.current?.pause());
     mediaHandler("seekto", event => { if (audio.current && event.seekTime != null) audio.current.currentTime = event.seekTime; });
     mediaHandler("seekbackward", () => { if (audio.current) audio.current.currentTime = Math.max(0, audio.current.currentTime - 15); });
@@ -151,8 +151,8 @@ function ProfessorPlayer({ id }: { id: string }) {
     {complete ? <>
       <audio ref={audio} src={`/api/lectures/${encodeURIComponent(id)}/audio`} preload="metadata"
         onLoadedMetadata={() => { if (!restored.current && audio.current) { const seconds = lecture.chunks.slice(0, lecture.cursor.chunkIndex).reduce((sum, chunk) => sum + (chunk.audio?.duration_seconds ?? 0), 0) + lecture.cursor.offsetSeconds; audio.current.currentTime = seconds; audio.current.playbackRate = rate; setPosition(seconds); lastPosition.current = seconds; restored.current = true; } }}
-        onPlay={() => setPlaying(true)} onPause={() => { setPlaying(false); void persist(); }} onEnded={() => { setPlaying(false); void persist(); }}
-        onTimeUpdate={() => { if (audio.current) { lastPosition.current = audio.current.currentTime; setPosition(audio.current.currentTime); } if (Date.now() - lastSave.current > 10000) void persist(); }}
+        onPlay={() => { if (blocked.current) audio.current?.pause(); else setPlaying(true); }} onPause={() => { setPlaying(false); void persist(); }} onEnded={() => { setPlaying(false); void persist(); }}
+        onTimeUpdate={() => { if (audio.current) { lastPosition.current = audio.current.currentTime; setPosition(audio.current.currentTime); } if (audio.current && !audio.current.paused && Date.now() - lastSave.current > 10000) void persist(); }}
         onError={() => { setError("Audio could not be loaded. Check the connection and reload your saved position."); }} />
       <div className="lecture-transport"><button aria-label="Back 15 seconds" onClick={() => seek(position - 15)}>−15 s</button><button className="lecture-play" disabled={conflicted} onClick={() => { if (playing) audio.current?.pause(); else void audio.current?.play().catch(error => setError(error.message)); }}>{playing ? "Pause lecture" : position ? "Resume lecture" : "Play lecture"}</button><button aria-label="Forward 15 seconds" onClick={() => seek(position + 15)}>+15 s</button></div>
       <label className="lecture-progress">Lecture position<input type="range" min={0} max={duration} step={0.1} value={Math.min(position, duration)} onChange={event => seek(Number(event.target.value))} /></label>

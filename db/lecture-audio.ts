@@ -10,7 +10,10 @@ export async function generateLectureAudio(db: LectureDatabase, bucket: Bucket, 
   apiKey: string | undefined, speechFetch: typeof fetch = fetch) {
   const lecture = await readLecture(db, owner, id, index);
   const old = await audioRow(db, owner, id, index);
-  if (old?.state === "ready" && old.object_key && await bucket.head(old.object_key)) return { ready: true, duplicate: true };
+  if (old?.state === "ready" && old.object_key) {
+    const stored = await bucket.head(old.object_key);
+    if (stored && stored.size === old.size_bytes) return { ready: true, duplicate: true };
+  }
   if (!apiKey) throw new LectureError("Lecture audio is not configured. The administrator must set the OPENAI_API_KEY Worker secret. Your script and saved position remain available.", 503);
   const lease = crypto.randomUUID(), now = Date.now();
   const acquired = await db.prepare(`INSERT INTO professor_lecture_audio(owner_id,lecture_id,chunk_index,state,lease_id,lease_until)
