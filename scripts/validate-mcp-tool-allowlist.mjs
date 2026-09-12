@@ -65,7 +65,7 @@ export async function validateMcpToolAllowlists({
     readFile(new URL(".codex/config.toml", repositoryRoot), "utf8"),
     ...CONTRACT_FILES.map((path) => readFile(new URL(path, repositoryRoot), "utf8")),
   ]);
-  const sharedSources = await Promise.all(["editorial-tools.ts", "leetcode-tools.ts", "coding-tools.ts", "drawing-tools.ts", "coaching-tools.ts", "solution-publication-tools.ts"].map(name => readFile(new URL(`mcp-worker/${name}`, repositoryRoot), "utf8")));
+  const sharedSources = await Promise.all(["editorial-tools.ts", "leetcode-tools.ts", "coding-tools.ts", "drawing-tools.ts", "coaching-tools.ts", "solution-publication-tools.ts", "lecture-player-tools.ts"].map(name => readFile(new URL(`mcp-worker/${name}`, repositoryRoot), "utf8")));
   const registered = [...parseRegisteredTools(workerSource), ...sharedSources.flatMap(parseRegisteredTools)];
   const repositoryEnabled = parseEnabledTools(repositoryConfig);
   const registeredSet = new Set(registered);

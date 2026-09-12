@@ -1,0 +1,64 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import { generateLectureAudio } from "../db/lecture-audio.ts";
+import { LectureError, lectureHash, lectureId } from "../db/lecture-policy.ts";
+import { readLecture, type LectureDatabase } from "../db/lectures.ts";
+import { streamLecture } from "../db/lecture-stream.ts";
+import { lecturePlayerHtml, lecturePlayerUri } from "./lecture-player-widget.ts";
+
+type Bucket = Pick<R2Bucket,"head"|"get"|"put"|"delete">;
+const mediaOrigin="https://limitless-mcp.vinosama.workers.dev";
+const appMeta={ui:{visibility:["model","app"]},"openai/widgetAccessible":true};
+export async function openLecturePlayer(db:LectureDatabase,owner:string,id:string,configured:boolean,origin=mediaOrigin){
+  const lecture=await readLecture(db,owner,id);
+  const ready=lecture.chunks.every(c=>c.audio?.state==="ready");
+  let audioUrl:string|null=null,expiresAt:number|null=null;
+  if(ready){
+    // Only this lecture's audio is delegated to the sandbox. The random bearer
+    // lives in widget-only metadata, never the model transcript or a public R2 key.
+    const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),n=>n.toString(16).padStart(2,"0")).join("");
+    expiresAt=Date.now()+2*60*60*1000;
+    await db.batch([
+      db.prepare("DELETE FROM professor_lecture_player_tickets WHERE expires_at<?").bind(Date.now()),
+      db.prepare("INSERT INTO professor_lecture_player_tickets(token_hash,owner_id,lecture_id,fingerprint,expires_at) VALUES(?,?,?,?,?)")
+        .bind(await lectureHash(token),owner,id,lecture.fingerprint,expiresAt),
+    ]);
+    audioUrl=`${origin}/lecture-media?ticket=${token}`;
+  }
+  const {fragment: _fragment, playerUrl: _playerUrl, ...data}=lecture;
+  void _fragment; void _playerUrl;
+  return {structuredContent:{lecture:data,ready,speechConfigured:configured},
+    content:[{type:"text" as const,text:JSON.stringify({lectureId:id,title:lecture.title,ready,estimatedMinutes:lecture.estimatedMinutes,speechConfigured:configured,
+      instruction:"Use the player in this conversation. A target or estimate is not measured audio duration. Generation uses the configured speech API. Mobile background and lock-screen playback depend on the host app."})}],
+    _meta:{audioUrl,expiresAt}};
+}
+export async function routeLectureMedia(db:LectureDatabase,bucket:Pick<R2Bucket,"get">,request:Request){
+  const url=new URL(request.url);
+  if(url.pathname!=="/lecture-media")return null;
+  const fail=(status:number)=>new Response("Lecture playback authorization is unavailable or expired.",{status,headers:{"Cache-Control":"private, no-store","Referrer-Policy":"no-referrer"}});
+  if(!["GET","HEAD"].includes(request.method))return fail(405);
+  const token=url.searchParams.get("ticket")??"";
+  if(!/^[a-f0-9]{64}$/.test(token))return fail(401);
+  const grant=await db.prepare(`SELECT t.owner_id,t.lecture_id FROM professor_lecture_player_tickets t JOIN professor_lectures l
+    ON l.owner_id=t.owner_id AND l.lecture_id=t.lecture_id AND l.fingerprint=t.fingerprint WHERE t.token_hash=? AND t.expires_at>?`)
+    .bind(await lectureHash(token),Date.now()).first<{owner_id:string;lecture_id:string}>();
+  if(!grant)return fail(401);
+  try{
+    const response=await streamLecture(db,bucket,grant.owner_id,grant.lecture_id,request);
+    response.headers.set("Referrer-Policy","no-referrer");response.headers.set("X-Content-Type-Options","nosniff");
+    return response;
+  }catch{return fail(503);}
+}
+export function registerLecturePlayerTools(server:McpServer,db:LectureDatabase,bucket:Bucket,owner:string,apiKey:string|undefined){
+  server.registerResource("lecture-player",lecturePlayerUri,{},async()=>({contents:[{uri:lecturePlayerUri,mimeType:"text/html;profile=mcp-app",text:lecturePlayerHtml,
+    _meta:{ui:{prefersBorder:true,csp:{connectDomains:[],resourceDomains:[mediaOrigin]}},"openai/widgetDescription":"Generate and play a complete Professor lecture inside this ChatGPT conversation, with a continuous seekable recording and saved position."}}]}));
+  server.registerTool("open_practice_lecture_player",{
+    title:"Open lecture player",description:"Open the saved Professor lecture as an audio player inside this ChatGPT conversation. The player can generate all missing speech sections, then play one continuous recording without another chat turn between sections. Returns real preparation state and saved position. Does not automatically start audio or charge for speech. Mobile background/lock-screen playback is host-dependent and not guaranteed.",
+    inputSchema:{lectureId},annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false},
+    _meta:{...appMeta,ui:{...appMeta.ui,resourceUri:lecturePlayerUri},"openai/outputTemplate":lecturePlayerUri},
+  },async({lectureId:id})=>{try{return await openLecturePlayer(db,owner,id,Boolean(apiKey));}catch(e){return {isError:true,content:[{type:"text" as const,text:e instanceof LectureError?e.message:"Player could not be opened."}]};}});
+  server.registerTool("generate_lecture_audio_section",{
+    description:"After the user asks to generate a lecture's audio, request one saved script section from the configured OpenAI speech API. This can incur API usage. Repeat for missing section indices, preserving lecture identity, then open_practice_lecture_player for in-chat continuous playback. Existing ready audio is reused. On uncertainty reread state; do not change script IDs to force duplicate generation. This is prepared audio, not a ChatGPT Live speaking turn.",
+    inputSchema:{lectureId,chunkIndex:z.number().int().min(0).max(199)},annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:true},_meta:appMeta,
+  },async({lectureId:id,chunkIndex})=>{try{const data=await generateLectureAudio(db,bucket,owner,id,chunkIndex,apiKey);return {structuredContent:data,content:[{type:"text" as const,text:JSON.stringify(data)}]};}catch(e){return {isError:true,content:[{type:"text" as const,text:e instanceof LectureError?e.message:"Audio generation failed. Reread preparation state before retrying."}]};}});
+}

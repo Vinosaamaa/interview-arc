@@ -58,5 +58,9 @@ export async function streamLecture(db: LectureDatabase, bucket: Pick<R2Bucket, 
     async pull(controller) { try { const item = await iterator.next(); if (item.done) controller.close(); else controller.enqueue(item.value); } catch (error) { controller.error(error); } },
     async cancel() { await iterator.return(undefined); },
   });
-  return new Response(request.method === "HEAD" ? null : stream, { status: range.partial ? 206 : 200, headers });
+  // Workers derives Content-Length from the body and ignores a manually set
+  // value for an ordinary stream. Preserve the known range length at runtime.
+  const body = typeof FixedLengthStream === "function"
+    ? stream.pipeThrough(new FixedLengthStream(range.end - range.start + 1)) : stream;
+  return new Response(body, { status: range.partial ? 206 : 200, headers });
 }

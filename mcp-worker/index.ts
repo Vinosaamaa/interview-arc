@@ -2,6 +2,7 @@ import { createMcpHandler } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ScopedMcpServer } from "./scoped-server";
 import { registerChatgptTools } from "./chatgpt-tools";
+import { registerLecturePlayerTools, routeLectureMedia } from "./lecture-player-tools";
 import { listLectures, readLecture, saveLecture, saveLectureCursor } from "../db/lectures";
 import { LectureError, lectureId, saveLectureSchema, lectureCursorSchema } from "../db/lecture-policy";
 import { registerEditorialTools } from "./editorial-tools";
@@ -346,6 +347,7 @@ import { routeLiveV1 } from "./live-v1";
 import { isLiveV1Path } from "./live-v1-path";
 
 interface Env extends ChatgptAccessConfig {
+  OPENAI_API_KEY?: string;
   DB: D1Database;
   AUDIO: R2Bucket;
   LIVE_UPDATES: DurableObjectNamespace;
@@ -2634,6 +2636,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
   registerLeetcodeTools(server, env.AUDIO, ownerId);
   registerCodingTools(server, env.DB, env.AUDIO, ownerId);
   registerCoachingTools(server);
+  registerLecturePlayerTools(server, env.DB, env.AUDIO, ownerId, env.OPENAI_API_KEY);
   registerDrawingTools(server, env.DB, env.AUDIO, ownerId);
 
   const lectureResult = async (work: () => Promise<object>) => {
@@ -2655,7 +2658,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
   }, input => lectureResult(() => readLecture(env.DB, ownerId, input.lectureId, input.chunkIndex)));
   server.registerTool("save_lecture_position", {
     description: "Save a confirmed lecture reading/playback position using the last observed cursor revision and a stable operationId. Save characterOffset only from text actually delivered; never infer exact speech progress from elapsed time. Exact retries replay; stale revisions fail without overwriting a newer player/chat position. This does not save a practice transcript or mark a lesson complete.",
-    inputSchema: lectureCursorSchema, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    inputSchema: lectureCursorSchema, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false }, _meta: { ui: { visibility: ["model", "app"] }, "openai/widgetAccessible": true },
   }, input => lectureResult(() => saveLectureCursor(env.DB, ownerId, input)));
 
   server.registerTool(
@@ -5281,6 +5284,7 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
+    if (url.pathname === "/lecture-media") return (await routeLectureMedia(env.DB, env.AUDIO, request))!;
     if (url.pathname === "/health") return json(request, { ok: true, service: "interview-arc-mcp" });
 
     if (url.pathname === "/chatgpt/mcp") {

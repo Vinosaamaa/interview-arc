@@ -3,6 +3,8 @@ import worker from "../../mcp-worker/index";
 import { GET as readImportedPracticeRoute } from "../../app/api/chatgpt-practice/route";
 import { solutionItemJobId } from "../../mcp-worker/solution-publication-tools";
 import { resolveOwnerId } from "../../db/owner";
+import { generateLectureAudio } from "../../db/lecture-audio";
+import { streamLecture } from "../../db/lecture-stream";
 const issuer = "https://synthetic-arc-worker.cloudflareaccess.com";
 let pair: CryptoKeyPair;
 let publicKey: JsonWebKey;
@@ -38,6 +40,11 @@ const base64 = (value: string | Uint8Array) => btoa(typeof value === "string" ? 
 const syntheticWorker = {
   async fetch(request: Request, env: Parameters<typeof worker.fetch>[1], ctx: ExecutionContext) {
     await prepareSigningKey(env.DB);
+    if (new URL(request.url).pathname === "/fixture/lecture-audio") {
+      const owner = await resolveOwnerId(new Request(request.url, { headers: { "x-interview-arc-authenticated-email": "synthetic@example.test" } }));
+      if (request.method === "POST") return Response.json(await generateLectureAudio(env.DB, env.AUDIO, owner, "synthetic-professor", 0, "synthetic-only", async () => new Response(new Uint8Array(48000), { headers: { "content-type": "audio/pcm" } })));
+      return streamLecture(env.DB, env.AUDIO, owner, "synthetic-professor", request);
+    }
     if (new URL(request.url).pathname === "/fixture/reserve-conflicting-solution-child" && request.method === "POST") {
       const owner = await resolveOwnerId(new Request(request.url, { headers: { "x-interview-arc-authenticated-email": "synthetic@example.test" } }));
       const jobId = await solutionItemJobId("synthetic-interrupted-batch", "native-attempt");

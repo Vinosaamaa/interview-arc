@@ -48,8 +48,9 @@ media processing dependency. The initial implementation serves one seekable WAV
 across private PCM parts. Its bandwidth is substantial, approximately 172.8 MB per
 hour, but the storage and streaming path remains within the existing Worker.
 
-The player is an auxiliary page in Interview Arc, using the existing paper,
-teal and serif design tokens. It does not add a workspace or embed ChatGPT.
+The primary player is an MCP Apps resource displayed inside the connected
+ChatGPT conversation. Interview Arc also provides an auxiliary page using the
+existing paper, teal and serif design tokens.
 Scripts are prepared in connected text or pasted by the owner; the Worker does
 not claim to author or research lectures. Audio generation starts explicitly,
 reuses confirmed parts and reports missing deployment configuration.
@@ -58,7 +59,11 @@ reuses confirmed parts and reports missing deployment configuration.
 
 D1 owns immutable scripts, reference pins, chunk metadata, leases and cursor
 receipts. Private R2 holds generated PCM, which is separate from user recordings
-and Learning Session evidence. There is no public object URL or Git lecture.
+and Learning Session evidence. There is no public R2 object URL or Git lecture. The in-chat sandbox receives a
+two-hour random bearer grant only in widget metadata. D1 stores its hash, owner,
+lecture and immutable fingerprint. A dedicated media route checks that grant
+before serving audio; anyone possessing it can play that lecture until expiry.
+Refresh renews the grant. The model transcript never contains the grant.
 Concurrent position writes require matching revisions. A conflict pauses the
 player. Lost acknowledgements retry the same operation identity. Unconfirmed
 position updates can be lost when a browser is terminated; the product does not
@@ -74,7 +79,12 @@ promise based on word count.
 
 Focused SQLite and synthetic R2/Speech tests cover immutable identity, isolation,
 concurrent cursor conflicts, generation exclusion and retries, byte-range joins,
-HEAD without object reads and the sample count for 60 minutes. Lint and local D1
+HEAD without object reads, expired/fingerprint-invalid media grants, and the
+sample count for 60 minutes. A sandboxed browser bridge exercises in-chat
+generation controls, uninterrupted part transitions, cursor save/resume and
+desktop/mobile layouts. The real Workers runtime confirms content lengths via
+FixedLengthStream. A separate synthetic 60-minute stream reached its end at 16x
+speed; this is transport coverage, not a physical one-hour listening test. Lint and local D1
 migration/content import pass. Provider-generated speech, a physical device's
 locked-screen hour, and consumer Live continuation remain separate acceptance
 steps. No production release is asserted by this architecture record.

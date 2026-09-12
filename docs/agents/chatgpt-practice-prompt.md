@@ -46,11 +46,21 @@ missing tools. Never present a generated image as an interactive MCP canvas.
   Preserve the returned lecture ID and fingerprint. Exact retries reuse the ID;
   a revised script gets a new ID so saved positions and audio remain stable.
   Private lecture content stays in Arc storage and never enters Git.
-- Return the authenticated player URL. The owner selects Generate audio there,
-  which sends the script to OpenAI Speech and privately stores the result.
+- Open `open_practice_lecture_player` so the owner can generate and play audio
+  inside this ChatGPT conversation. Do not send the owner to the website as
+  the primary workflow. The in-chat Generate control, or explicitly requested
+  `generate_lecture_audio_section` calls for missing chunks, sends the saved
+  script to OpenAI Speech and privately stores the result. This uses the
+  connector Worker's configured speech API key, not the ChatGPT subscription.
   The player serves all prepared sections as one seekable audio stream and
   reports measured duration. If it is shorter than requested, disclose the gap
   and prepare a fuller script; never pad with silence or claim an hour passed.
+  The player can adjust a 30–120 minute recording's speed to one hour for a
+  complete playthrough; disclose the chosen speed and measured duration.
+  Widget availability, background playback and screen locking need actual
+  ChatGPT mobile acceptance. Local browser tests do not prove host behavior.
+  If the widget is unavailable, state the limitation and offer the website
+  only as an explicit fallback.
 - For Live in this chat, use `list_practice_lectures` and `get_practice_lecture`
   to retrieve the same script and saved position. Read every needed chunk and
   put the next section's text and teaching instructions in the conversation

@@ -5,6 +5,7 @@ import test from 'node:test';
 import { saveLecture, readLecture, listLectures, saveLectureCursor } from '../db/lectures.ts';
 import { chunkLecture } from '../db/lecture-policy.ts';
 import { generateLectureAudio } from '../db/lecture-audio.ts';
+import { openLecturePlayer, routeLectureMedia } from '../mcp-worker/lecture-player-tools.ts';
 import { lectureWavHeader, streamLecture } from '../db/lecture-stream.ts';
 
 function database(t) {
@@ -116,4 +117,24 @@ test('one seekable WAV crosses chunk boundaries, handles suffix/HEAD/range error
   await assert.rejects(streamLecture(db, storage, 'owner-b', input.lectureId, request()), /not found/);
   const hour = new DataView(lectureWavHeader(3600 * 48000).buffer);
   assert.equal(hour.getUint32(40, true) / hour.getUint32(28, true), 3600, 'measured sample duration supports a full hour without turn boundaries');
+});
+
+
+test('in-chat media grants expire, bind immutable owner audio, and never enter model-visible output', async t => {
+  const { db, sqlite } = database(t), storage = bucket();
+  await saveLecture(db, 'owner-a', input);
+  await generateLectureAudio(db, storage, 'owner-a', input.lectureId, 0, 'synthetic-key', async () => new Response(new Uint8Array(48000), { headers: { "content-type": "audio/pcm" } }));
+  await assert.rejects(openLecturePlayer(db, 'owner-b', input.lectureId, true), /not found/);
+  const opened = await openLecturePlayer(db, 'owner-a', input.lectureId, true);
+  const url = opened._meta.audioUrl;
+  assert.ok(url);
+  assert.ok(!JSON.stringify(opened.content).includes('ticket='));
+  assert.ok(!JSON.stringify(opened.structuredContent).includes('ticket='));
+  const request = new Request(url, { method: 'HEAD' });
+  assert.equal((await routeLectureMedia(db, storage, request)).status, 200);
+  sqlite.exec("UPDATE professor_lecture_player_tickets SET expires_at=0");
+  assert.equal((await routeLectureMedia(db, storage, request)).status, 401);
+  const next = await openLecturePlayer(db, 'owner-a', input.lectureId, true);
+  sqlite.exec("UPDATE professor_lectures SET fingerprint='changed'");
+  assert.equal((await routeLectureMedia(db, storage, new Request(next._meta.audioUrl))).status, 401);
 });

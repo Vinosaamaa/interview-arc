@@ -1,10 +1,35 @@
 # Professor lectures
 
-An immutable prepared lesson supplies continuous listening in the Arc player and
-bounded script fragments in connected text ChatGPT. Lecture playback is not an
+An immutable prepared lesson supplies continuous listening in an embedded ChatGPT
+player, with an optional Arc website player and bounded script retrieval. Lecture playback is not an
 interview or Learning Session: it never changes timers, outcomes, transcripts,
 publication, homework or mastery evidence. Generated narration is distinct from
 recorded user speech; Learn Voice remains transcript-only.
+
+## In-chat playback
+
+`open_practice_lecture_player` returns an MCP Apps audio widget, compact lecture
+state and widget-only media authorization. Generate runs missing section calls
+through `generate_lecture_audio_section`; completed sections are reused after
+an interrupted widget. Speech uses the connector Worker's OPENAI_API_KEY and
+incurs provider usage independently of the ChatGPT subscription.
+
+After every section is ready, a random 256-bit ticket authorizes only that
+immutable lecture's audio for two hours. D1 stores its hash, owner, lecture,
+fingerprint and expiry. `/lecture-media` validates this restricted ticket before
+serving GET/HEAD and byte ranges. It accepts no owner or object-key input. Tokens
+stay out of model-visible tool content. No cookies or general account credential
+is exposed to the widget; no source or token is logged by the handler. A ticket
+is a temporary bearer capability and must not be shared.
+
+The widget uses one native audio element, saves acknowledged cursor revisions,
+pauses on save conflicts, and supports seek, speed and measured duration. A
+30–120 minute recording can be played in one hour by setting speed to its actual
+duration divided by 3600. This is disclosed playback speed, never silence padding.
+The host controls iframe lifetime, mobile media interruptions, background and
+lock-screen playback. Actual mobile acceptance remains a release gate; an iframe
+test cannot establish ChatGPT host behavior. ChatGPT Live automatic speech turns
+remain a separate, unverified capability.
 
 ## Private identity and continuation
 
