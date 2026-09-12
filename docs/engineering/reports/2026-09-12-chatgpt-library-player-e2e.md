@@ -30,3 +30,14 @@ or audible player state in the user's interface.
 An authenticated production connector read currently succeeds. The new feature
 tools still require release before their actual-host tests can pass. No real
 ChatGPT feature test has yet been recorded as passed in this report.
+
+
+## Local integration observations
+
+The local Workers test passes both upload adapters, exact original downloads,
+PDF text and image retrieval, question creation, Today activity planning and
+source links. It also passes source-backed Quick Study lesson creation, an exact
+lesson-revision link and a planned Learning Session. The website browser test
+passes original upload/download, full Markdown paging, saved HTML details, PDF
+page rendering and desktop/390px layouts. These observations remain local
+integration coverage; the actual ChatGPT rows above are still pending.

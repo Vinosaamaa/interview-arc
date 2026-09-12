@@ -23,12 +23,12 @@ capabilities: ["private-study-resources"]
 amends: []
 supersedes: []
 learningRefs: []
-sources: [{"label": "Issue #475", "url": "https://github.com/Vinosaamaa/interview-arc/issues/475", "kind": "issue"}]
-verification: {"state":"verified","evidenceRefs":["tests/study-resources.test.mjs","docs/contracts/study-resource-library.md"]}
+sources: [{"label": "Issue #475", "url": "https://github.com/Vinosaamaa/interview-arc/issues/475", "kind": "issue"}, {"label": "PR #476", "url": "https://github.com/Vinosaamaa/interview-arc/pull/476", "kind": "pull-request"}]
+verification: {"state":"verified","evidenceRefs":["tests/study-resources.test.mjs","tests/chatgpt-connector.integration.test.mjs","tests/study-resources.browser.mjs","docs/contracts/study-resource-library.md"]}
 visibility: public-safe
 publicationEligibility: eligible
 issue: 475
-pr: null
+pr: 476
 release: null
 run: null
 ---
