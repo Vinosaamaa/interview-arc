@@ -40,3 +40,20 @@ test('unsupported hosts and oversized files cannot trigger uploads',async()=>{
   const input=elements.get('files');input.files=[{name:'too-large.bin',size:25*1024*1024+1}];input.onchange();await settled(context);
   assert.equal(uploads,0);assert.match(elements.get('jobs').children[0].children[1].textContent,/25 MB/);
 });
+
+test('a structured host rejection identifies the failed boundary without exposing download URLs',async()=>{
+  const {elements,context,listeners}=widget({
+    async selectFiles(){return [{fileId:'file-synthetic-2',fileName:'original.txt'}];},
+    async getFileDownloadUrl(){throw {message:'File access denied at https://files.oaiusercontent.com/private?token=secret'};},
+    async callTool(){assert.fail('Unauthorized files must not reach the save tool');},
+    setWidgetState(){},
+  });
+  await elements.get('library').onclick();await settled(context);
+  const status=elements.get('jobs').children[0].children[1].textContent;
+  assert.match(status,/Get file download access: File access denied/);
+  assert.ok(!status.includes('token=secret'));
+  assert.match(status,/\[file URL\]/);
+  listeners.get('openai:set_globals')();
+  assert.match(elements.get('status').textContent,/Some uploads need attention/);
+  assert.equal(elements.get('retry').hidden,false);
+});

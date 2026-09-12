@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-export const resourceUploaderUri = "ui://interview-arc/study-resource-uploader-v1.html";
+export const resourceUploaderUri = "ui://interview-arc/study-resource-uploader-v2.html";
 
 // Use host-authorized file handles, never model-invented sandbox paths or URLs.
 export const resourceUploaderHtml = String.raw`<!doctype html>
@@ -22,28 +22,29 @@ function draw(){
   $('retry').hidden=busy||!jobs.some(j=>!j.resourceId&&(j.file||j.fileId));ready();
 }
 function ready(){const host=window.openai;const connected=typeof host?.getFileDownloadUrl==='function'&&typeof host?.callTool==='function';$('files').disabled=busy||!connected||typeof host?.uploadFile!=='function';$('library').disabled=busy||!connected||typeof host?.selectFiles!=='function';return connected;}
+function failureMessage(error){const message=typeof error==='string'?error:typeof error?.message==='string'?error.message:typeof error?.error?.message==='string'?error.error.message:'';return message.replace(/https?:\/\/\S+/g,'[file URL]').slice(0,300)||'The host did not provide an error message. Retry this same file.';}
 async function hash(value){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',value)),n=>n.toString(16).padStart(2,'0')).join('');}
 async function run(){if(busy)return;busy=true;draw();
   for(const job of jobs){if(job.resourceId)continue;try{
     if(job.file){if(!job.file.size||job.file.size>25*1024*1024)throw Error('Choose a non-empty file up to 25 MB.');job.expectedHash??=await hash(await job.file.arrayBuffer());}
-    job.status='Authorizing file with ChatGPT…';draw();
+    job.phase='Upload to ChatGPT';job.status='Authorizing file with ChatGPT…';draw();
     if(!job.fileId){if(!job.file)throw Error('Choose this file again to continue.');const uploaded=await window.openai.uploadFile(job.file);if(!uploaded?.fileId)throw Error('ChatGPT did not return a file handle. Choose the file again.');job.fileId=uploaded.fileId;}
     job.operationId??='chatgpt-file-'+await hash(new TextEncoder().encode(job.fileId));persist();
-    const link=await window.openai.getFileDownloadUrl({fileId:job.fileId});if(!link?.downloadUrl)throw Error('ChatGPT did not authorize a download. Select the file again.');
+    job.phase='Get file download access';const link=await window.openai.getFileDownloadUrl({fileId:job.fileId});if(!link?.downloadUrl)throw Error('ChatGPT did not authorize a download. Select the file again.');
     job.status='Saving exact original…';draw();
-    const result=await window.openai.callTool('save_study_resource_file',{operationId:job.operationId,title:job.name.slice(0,300),file:{file_id:job.fileId,download_url:link.downloadUrl,file_name:job.name,mime_type:job.mime||'application/octet-stream'}});
+    job.phase='Save original in Interview Arc';const result=await window.openai.callTool('save_study_resource_file',{operationId:job.operationId,title:job.name.slice(0,300),file:{file_id:job.fileId,download_url:link.downloadUrl,file_name:job.name,mime_type:job.mime||'application/octet-stream'}});
     if(result?.isError)throw Error(result.content?.find(c=>c.type==='text')?.text||'Save was not confirmed. Retry the same file.');
     let data=result?.structuredContent;if(!data){const text=result?.content?.find(c=>c.type==='text')?.text;if(text)try{data=JSON.parse(text);}catch{}}
     const resource=data?.resource;if(!resource?.resourceId||!resource.sourceSha256)throw Error('The server did not confirm the saved original. Retry the same file.');
     if(job.expectedHash&&resource.sourceSha256!==job.expectedHash)throw Error('Original hash mismatch. Do not use this saved resource.');
     job.resourceId=resource.resourceId;job.sha256=resource.sourceSha256;job.status='Saved · '+resource.sourceSha256;delete job.file;
-  }catch(error){job.status=error instanceof Error?error.message:'Upload was not confirmed.';}persist();draw();}
+  }catch(error){job.status=(job.phase||'Check original')+': '+failureMessage(error);}persist();draw();}
   busy=false;draw();$('status').textContent=jobs.every(j=>j.resourceId)?'Originals saved. ChatGPT can now find them with Interview Arc.':'Some uploads need attention. Retry keeps the same original identity.';
 }
 $('files').onchange=()=>{for(const file of Array.from($('files').files||[]))jobs.push({name:file.name,mime:file.type,file,status:'Waiting'});$('files').value='';void run();};
-$('library').onclick=async()=>{if(busy)return;try{const selected=await window.openai.selectFiles();for(const f of selected||[]){if(!f.fileId||jobs.some(j=>j.fileId===f.fileId))continue;jobs.push({name:f.fileName||'Original file',mime:f.mimeType,fileId:f.fileId,status:'Waiting'});}persist();draw();if(selected?.length)void run();}catch(error){$('status').textContent=error instanceof Error?error.message:'File selection was not completed.';}};
+$('library').onclick=async()=>{if(busy)return;try{const selected=await window.openai.selectFiles();for(const f of selected||[]){if(!f.fileId||jobs.some(j=>j.fileId===f.fileId))continue;jobs.push({name:f.fileName||'Original file',mime:f.mimeType,fileId:f.fileId,status:'Waiting'});}persist();draw();if(selected?.length)void run();}catch(error){$('status').textContent='Select original: '+failureMessage(error);}};
 $('retry').onclick=()=>void run();
-function connected(){draw();if(!busy)$('status').textContent=ready()?'Select the originals to save.':'This ChatGPT host has not exposed file access. Reopen this panel in an updated ChatGPT app, or upload through your Interview Arc website.';}
+function connected(){draw();if(!busy&&!jobs.length)$('status').textContent=ready()?'Select the originals to save.':'This ChatGPT host has not exposed file access. Reopen this panel in an updated ChatGPT app, or upload through your Interview Arc website.';}
 window.addEventListener('openai:set_globals',connected);
 window.addEventListener('message',event=>{if(event.source!==window.parent||event.data?.jsonrpc!=='2.0'||event.data?.id!=='arc-resource-init')return;if(event.data.error){$('status').textContent='ChatGPT could not connect this file picker.';return;}window.parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/initialized',params:{}},'*');connected();});
 window.parent.postMessage({jsonrpc:'2.0',id:'arc-resource-init',method:'ui/initialize',params:{protocolVersion:'2026-01-26',appInfo:{name:'Interview Arc study library',version:'1.0.0'},appCapabilities:{}}},'*');
