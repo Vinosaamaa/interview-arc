@@ -7,7 +7,9 @@ import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 export const CHATGPT_PRACTICE_TOOLS = new Set([
   "search_study_resources", "get_study_resource", "get_study_resource_image", "get_study_resource_original", "save_study_resource_file", "link_study_resource",
   "save_learning_lesson_revision", "query_learning_workspace", "create_learning_session", "query_learning_sessions",
+  "open_practice_lecture_player", "generate_lecture_audio_section",
   "get_practice_coaching_guide",
+  "list_practice_lectures", "save_practice_lecture", "get_practice_lecture", "save_lecture_position",
   "open_coding_editor", "get_coding_draft", "save_coding_draft", "submit_coding_draft", "get_coding_submission",
   "read_excalidraw_link",
   "get_leetcode_connection", "get_leetcode_problem", "get_leetcode_recent_submissions", "get_leetcode_submission", "get_leetcode_editorial",

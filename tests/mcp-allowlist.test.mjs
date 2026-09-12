@@ -11,7 +11,7 @@ import {
 const repositoryRoot = new URL("../", import.meta.url);
 
 test("the repository MCP allowlist matches the Worker registration catalog in order", async () => {
-  const [workerSource, editorialSource, leetcodeSource, codingSource, drawingSource, coachingSource, publicationSource, newModuleSource, repositoryConfig] = await Promise.all([
+  const [workerSource, editorialSource, leetcodeSource, codingSource, drawingSource, coachingSource, publicationSource, resourceSource, lectureSource, repositoryConfig] = await Promise.all([
     readFile(new URL("mcp-worker/index.ts", repositoryRoot), "utf8"),
     readFile(new URL("mcp-worker/editorial-tools.ts", repositoryRoot), "utf8"),
     readFile(new URL("mcp-worker/leetcode-tools.ts", repositoryRoot), "utf8"),
@@ -20,6 +20,7 @@ test("the repository MCP allowlist matches the Worker registration catalog in or
     readFile(new URL("mcp-worker/coaching-tools.ts", repositoryRoot), "utf8"),
     readFile(new URL("mcp-worker/solution-publication-tools.ts", repositoryRoot), "utf8"),
     readFile(new URL("mcp-worker/study-resource-tools.ts", repositoryRoot), "utf8"),
+    readFile(new URL("mcp-worker/lecture-player-tools.ts", repositoryRoot), "utf8"),
     readFile(new URL(".codex/config.toml", repositoryRoot), "utf8"),
   ]);
 
@@ -31,7 +32,8 @@ test("the repository MCP allowlist matches the Worker registration catalog in or
     ...parseRegisteredTools(drawingSource),
     ...parseRegisteredTools(coachingSource),
     ...parseRegisteredTools(publicationSource),
-    ...parseRegisteredTools(newModuleSource),
+    ...parseRegisteredTools(resourceSource),
+    ...parseRegisteredTools(lectureSource),
   ]);
 });
 
