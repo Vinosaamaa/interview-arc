@@ -8,11 +8,32 @@ recorded user speech; Learn Voice remains transcript-only.
 
 ## In-chat playback
 
+Default to **Play free on this device**. The owner requires speech without paid
+API credit. The widget and website use the same device-speech controller and
+only voices whose browser `localService` flag is true. No PC service, tunnel,
+external speech API or paid fallback is involved. ChatGPT prepares the original
+script; the device running its embedded player speaks it after the owner presses
+Play. A missing local voice is an explicit unavailable state, never permission
+to generate paid audio.
+
+The widget starts with one private script fragment and fetches one bounded
+owner-scoped section ahead through `get_practice_lecture`. Short utterances retain
+every character and advance automatically without another model turn. Word
+boundary events, or the start of the current sentence when unavailable, supply
+the resume offset. Pause and chapter changes save acknowledged cursor revisions;
+save conflicts stop playback. No seconds-to-text alignment is invented.
+
+Free device speech does not create a downloadable audio file or a measured full
+recording. A one-hour script estimate remains an estimate, and voice speed varies
+by device. Background and screen-lock continuity remain host-dependent acceptance
+checks. Previously prepared recordings retain their existing native player.
+
 `open_practice_lecture_player` returns an MCP Apps audio widget, compact lecture
-state and widget-only media authorization. Generate runs missing section calls
+state and widget-only media authorization. The legacy paid generation tool runs missing section calls
 through `generate_lecture_audio_section`; completed sections are reused after
 an interrupted widget. Speech uses the connector Worker's OPENAI_API_KEY and
-incurs provider usage independently of the ChatGPT subscription.
+incurs provider usage independently of the ChatGPT subscription. It is not part
+of free playback and must never be called for the owner's free-speech request.
 
 After every section is ready, a random 256-bit ticket authorizes only that
 immutable lecture's audio for two hours. D1 stores its hash, owner, lecture,

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { readLecture } from "../../db/lectures";
 import { lectureSectionsFromMarkdown, type LectureCursorInput } from "../../db/lecture-policy";
 import "./player.css";
+import { DeviceLecturePlayer } from "./device-player";
 
 type Lecture = Awaited<ReturnType<typeof readLecture>> & { speechConfigured: boolean };
 type Summary = { lectureId: string; title: string; estimatedMinutes: number };
@@ -17,7 +18,7 @@ async function json<T>(response: Response): Promise<T> {
 const send = <T,>(action: string, input: unknown, keepalive = false) => fetch("/api/lectures", {
   method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, input }), keepalive,
 }).then(json<T>);
-const preparationPrompt = "Prepare a complete one-hour Professor lecture on the topic I select. Teach from first principles with detailed examples, calculations, tradeoffs and failure cases. Research real sources first. Write roughly 7,200 spoken words in ordered sections, then save the complete script using Interview Arc's save_practice_lecture tool. Return its continuous-player link and retain its lecture ID for Live continuation. Do not replace the lecture with an outline or claim uninterrupted ChatGPT Voice is guaranteed.";
+const preparationPrompt = "Prepare a complete one-hour Professor lecture on the topic I select. Teach from first principles with detailed examples, calculations, tradeoffs and failure cases. Research real sources first. Write roughly 7,200 spoken words in ordered sections, then save the complete script using Interview Arc's save_practice_lecture tool. Open its in-chat player with open_practice_lecture_player and use Play free on this device. Do not request paid speech generation. Retain its lecture ID for continuation. Do not replace the lecture with an outline or claim uninterrupted ChatGPT Voice is guaranteed.";
 
 export default function LectureLibrary({ initialId }: { initialId: string | null }) {
   const [lectures, setLectures] = useState<Summary[]>([]), [selected, setSelected] = useState(initialId);
@@ -37,7 +38,7 @@ export default function LectureLibrary({ initialId }: { initialId: string | null
       if (draft.current?.content !== content) draft.current = { content, id: crypto.randomUUID() };
       const lectureId = draft.current.id;
       await send("save", { lectureId, title, sources: source.split(/\r?\n/).filter(Boolean).map(url => ({ label: "Lecture reference", url: url.trim() })), sections });
-      await refresh(); draft.current = null; setSelected(lectureId); setScript(""); setMessage("Script saved privately. Prepare its audio when you are ready.");
+      await refresh(); draft.current = null; setSelected(lectureId); setScript(""); setMessage("Script saved privately. Play it with the free device voice when ready.");
     } catch (error) { setError((error as Error).message); } finally { setSaving(false); }
   }
   return <main className="lecture-page">
@@ -65,7 +66,7 @@ export default function LectureLibrary({ initialId }: { initialId: string | null
 
 function ProfessorPlayer({ id }: { id: string }) {
   const [lecture, setLecture] = useState<Lecture | null>(null), [error, setError] = useState("");
-  const [generating, setGenerating] = useState(false), [playing, setPlaying] = useState(false), [position, setPosition] = useState(0), [rate, setRate] = useState(1);
+  const [playing, setPlaying] = useState(false), [position, setPosition] = useState(0), [rate, setRate] = useState(1);
   const [conflicted, setConflicted] = useState(false);
   const revision = useRef(0), lastPosition = useRef(0), queued = useRef<number | null>(null);
   const [saveStatus, setSaveStatus] = useState("Position loaded"), [excerpt, setExcerpt] = useState("");
@@ -125,25 +126,13 @@ function ProfessorPlayer({ id }: { id: string }) {
     mediaHandler("seekforward", () => { if (audio.current) audio.current.currentTime = Math.min(duration, audio.current.currentTime + 15); });
     return () => { for (const name of ["play", "pause", "seekto", "seekbackward", "seekforward"] as const) mediaHandler(name, null); navigator.mediaSession.metadata = null; };
   }, [lecture, complete, duration]);
-  async function generate() {
-    if (!lecture) return; setGenerating(true); setError("");
-    try {
-      for (const chunk of lecture.chunks) {
-        if (!mounted.current) break;
-        if (chunk.audio?.state === "ready") continue;
-        await fetch(`/api/lectures/${encodeURIComponent(id)}/audio/${chunk.index}`, { method: "POST" }).then(json);
-        await refresh();
-      }
-    } catch (error) { if (mounted.current) setError((error as Error).message); }
-    finally { if (mounted.current) setGenerating(false); }
-  }
   if (!lecture) return <p role="status">{error || "Loading your lecture…"}</p>;
   const ready = lecture.chunks.filter(chunk => chunk.audio?.state === "ready").length;
   return <article className="professor-player">
     <p className="lecture-eyebrow">Professor mode · AI-generated voice</p><h2>{lecture.title}</h2>
     <div className="lecture-facts"><span><strong>{complete ? clock(duration) : `${lecture.estimatedMinutes} min`}</strong>{complete ? "Measured audio" : "Script estimate"}</span><span><strong>60 min</strong>Requested lesson</span><span><strong>{ready}/{lecture.chunks.length}</strong>Audio parts ready</span></div>
     {error ? <p role="alert" className="lecture-error">{error} <button className="lecture-secondary" onClick={() => window.location.reload()}>Reload saved position</button></p> : null}
-    {!complete ? <div className="lecture-preparation"><p>The complete script is saved. Generate every audio part before listening continuously.</p><p>Generation sends this script to OpenAI Speech and uses the configured API account. Completed parts are reused on retry.</p><button disabled={generating || !lecture.speechConfigured} onClick={() => void generate()}>{generating ? `Preparing audio · ${ready}/${lecture.chunks.length}` : ready ? "Prepare remaining audio" : "Generate lecture audio"}</button>{!lecture.speechConfigured ? <p>Audio generation needs administrator configuration. Your script is available in ChatGPT now.</p> : null}</div> : null}
+    {!complete ? <DeviceLecturePlayer lecture={lecture} onPlay={() => audio.current?.pause()} /> : null}
     {complete && duration < 3600 ? <p className="lecture-note">This recording is {clock(duration)}, shorter than the requested hour. Ask ChatGPT to expand the lecture and save a new version.</p> : null}
     {complete ? <>
       <audio ref={audio} src={`/api/lectures/${encodeURIComponent(id)}/audio`} preload="metadata"
