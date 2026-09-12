@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { readLecture } from "../../db/lectures";
-import type { LectureCursorInput } from "../../db/lecture-policy";
+import { lectureSectionsFromMarkdown, type LectureCursorInput } from "../../db/lecture-policy";
 import "./player.css";
 
 type Lecture = Awaited<ReturnType<typeof readLecture>> & { speechConfigured: boolean };
@@ -32,10 +32,7 @@ export default function LectureLibrary({ initialId }: { initialId: string | null
   async function addScript(event: React.FormEvent) {
     event.preventDefault(); setSaving(true); setError("");
     try {
-      const sections: { id: string; title: string; text: string }[] = [];
-      let heading = "Introduction", body: string[] = [];
-      const append = () => { if (body.join("\n").trim()) sections.push({ id: `section-${sections.length + 1}`, title: heading, text: body.join("\n").trim() }); body = []; };
-      for (const line of script.split(/\r?\n/)) { if (/^#{1,3}\s/.test(line)) { append(); heading = line.replace(/^#{1,3}\s+/, ""); } else body.push(line); } append();
+      const sections = lectureSectionsFromMarkdown(script);
       const content = JSON.stringify({ title, source, sections });
       if (draft.current?.content !== content) draft.current = { content, id: crypto.randomUUID() };
       const lectureId = draft.current.id;
