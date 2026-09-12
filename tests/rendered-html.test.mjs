@@ -64,7 +64,11 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.match(bundle, /D1 DRAFT · NOT YET IN THE JOURNAL/);
   assert.match(bundle, /CONVERSATION TRANSCRIPT/);
   assert.match(bundle, /Your recording sits between the prompt and the answer it captures/);
-  assert.doesNotMatch(bundle, /Attach your recording|Add an answer recording|Choose files/);
+  assert.doesNotMatch(bundle, /Attach your recording|Add an answer recording/);
+  // The study library has an intentional file picker. Keep the old recording
+  // uploader prohibition scoped to the practice dashboard that owned it.
+  const dashboardSource = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(dashboardSource, /Choose files/);
   assert.match(bundle, /up to two due reviews first/);
   assert.match(bundle, /Sweet September/);
   assert.match(bundle, /Forest Mist Whispers/);
