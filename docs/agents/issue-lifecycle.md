@@ -190,103 +190,11 @@ The PR records:
 - before/after evidence for visible work;
 - risks, rollback, changed contracts, and postmortems.
 
-## Execution time and metered-cost record
+## Task communication and proportionate verification
 
-Every implementation PR must keep a concise chronological execution ledger so
-the user can see what this specific task actually did. The ledger is live
-instrumentation, not a standard release checklist and not a narrative
-reconstructed at handoff time.
-
-Wall-clock timing begins when the user submits the request, including model
-processing before the first tool call. Use the client's exact “worked for” or
-turn duration as the authoritative wall-clock measurement when it is exposed.
-The first shell or tool timestamp marks only the start of tool execution; never
-substitute it for the request-submission time. If neither the request timestamp
-nor a client-measured duration is available, report total wall-clock time as
-`unknown`.
-
-Before the first substantive tool action, read the current system clock and
-record `tool_execution_started_at`. At the boundaries of each meaningful work
-block, record an exact Pacific timestamp in this format:
-
-```text
-YYYY-MM-DD HH:MM:SS PDT (-0700)
-YYYY-MM-DD HH:MM:SS PST (-0800)
-```
-
-Use `PDT` or `PST` according to the clock on that date. Do not round these
-timestamps. Derive each step duration arithmetically from its recorded start
-and end; never infer it from memory, file modification times, commit times, or
-approximate conversation position.
-
-Name every row after a meaningful task-specific work block and its target or
-outcome. Author the blocks from the current task; never begin with a universal
-list of phases. Consolidate related actions whose individual durations are
-under two minutes into one concise block. Never expose one- or two-second shell
-commands as separate rows. If the whole task takes less than two minutes, use
-one row for the complete task. If an action did not happen, omit it completely.
-Do not add `Not run`, `N/A`, zero-duration placeholders, or empty rows merely
-to satisfy a template. If a meaningful action repeats, record the repeated
-block separately and explain why it repeated.
-
-Use this flexible template for only the steps that actually occurred:
-
-```markdown
-## Execution ledger
-
-- request_submitted_at: exact client timestamp or unavailable
-- tool_execution_started_at: YYYY-MM-DD HH:MM:SS PDT/PST (UTC offset)
-- ledger_finished_at: YYYY-MM-DD HH:MM:SS PDT/PST (UTC offset)
-- client_measured_duration: HH:MM:SS or unavailable
-- reconciliation: matched, or a concrete explanation of the resolved difference
-
-| Meaningful work block | Started | Ended | Duration | Result |
-| --- | --- | --- | ---: | --- |
-| Concise task-specific work block | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | Concrete result |
-
-- client-measured wall-clock total: HH:MM:SS or unknown
-- active engineering total: HH:MM:SS or unknown
-- uninstrumented gaps or overlap notes, only when present:
-- hosted runs, artifacts, and metered usage, only when used:
-```
-
-Record an external wait or blocker as its own task-specific block only when it
-actually occurs and lasts at least two minutes. Consolidate shorter waits into
-one concise note rather than publishing individual micro-rows. When actions
-overlap, identify the overlap and do not double-count it.
-
-At handoff, use the client's exact “worked for” or turn duration as total
-wall-clock time because it includes pre-tool model processing. If the client
-also exposes the request timestamp, reconcile it with the final timestamp. Do
-not calculate wall-clock time from `tool_execution_started_at`; that would omit
-pre-tool processing. If client timing is unavailable, report wall-clock time as
-`unknown`. Calculate active engineering time only from recorded,
-non-overlapping meaningful work blocks after excluding external waits. If
-exact instrumentation was missed, report the affected duration as `unknown`;
-do not substitute a confident-looking estimate. Historical work that predates
-this rule may be explicitly labeled `reconstructed`, but reconstructed values
-must not be presented as exact measurements.
-
-Post an interim ledger update whenever wall-clock time exceeds 30 minutes
-rather than waiting until the end.
-
-The final user-facing handoff for every implementation turn must repeat this
-complete ledger; a PR link or one combined total is not a substitute. The
-ledger is an administrative coordination record and must not be appended to a
-practice activity transcript.
-
-For services actually used during the task, also record measurable metered
-usage:
-
-- every GitHub Actions run used for the change, including run URL, runner OS,
-  conclusion, and actual runtime;
-- artifacts uploaded and their retention period;
-- paid external API or hosted-service usage when the provider exposes it.
-
-Do not create a metered-usage section for a service the task did not use. Do
-not invent a monetary amount. Label the amount `unknown` when an actually used
-provider does not expose account-level billing data, and distinguish a job that
-never started from one that ran and consumed minutes.
+Do not produce or post execution ledgers, timing breakdowns, hosted-run tables,
+or cost reports unless the user explicitly asks. Keep normal updates concise
+and report the outcome, relevant verification, and unresolved blockers.
 
 Use the cheapest trustworthy validation path and avoid redundant work. Run the
 focused local checks that are supported and proportionate on the current
@@ -298,19 +206,15 @@ For website work, keep the supported local-D1 checks, focused tests, lint, and
 build before the independent hosted checks. For Voice work, the Hosted CI
 efficiency rules in `interview-arc-voice/AGENTS.md` and the detailed
 `interview-arc-voice/docs/artifact-promotion.md` contract are authoritative.
-The ledger must identify the focused local checks, complete PR workflow,
-applicable staged-artifact verification, and whether merged `main` promoted
-tree-equivalent bytes or rebuilt. When promotion proves that merged `main` is
-byte-identical to the already staged PR artifact, record reuse of those exact
-local bytes; do not download, rebuild, or repeat an equivalent staged smoke
-test merely because the merge commit or artifact name changed. All
-lane-specific signing, installation, and installed-app requirements below
-still apply.
+When promotion proves that merged `main` is byte-identical to the already
+staged PR artifact, reuse those exact local bytes; do not download, rebuild,
+or repeat an equivalent staged smoke test merely because the merge commit
+or artifact name changed. All lane-specific signing, installation, and
+installed-app requirements below still apply.
 
 If hosted CI is blocked by billing or infrastructure, do not retry it blindly:
-record whether the job started and consumed runner time, complete every safe
-focused check, and state explicitly which required CI or release evidence is
-still missing.
+complete every safe focused check and state which required CI or release
+evidence is still missing.
 
 ## Release, verification, and closure
 

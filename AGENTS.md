@@ -6,8 +6,7 @@ interview-preparation journal, not a LeetCode clone or general chatbot.
 Before GitHub work, read
 [`docs/agents/issue-lifecycle.md`](docs/agents/issue-lifecycle.md). Every
 non-emergency product change starts with its owning issue; that contract owns
-repository routing, PR linkage, verification, release, resolution, and
-execution-ledger requirements.
+repository routing, PR linkage, verification, release, and resolution requirements.
 
 Do not create or change a thread Goal unless the user explicitly asks.
 
@@ -126,5 +125,3 @@ Interview Arc, and perform its design-plan and self-critique passes.
   `docs/contracts/owner-private-practice-records.md`.
 - Never merge/deploy another task's uncommitted work. Production publishing is
   owned by the main-branch workflow and follows successful validation.
-- Follow the exact execution-ledger and hosted-run reporting rules in
-  `docs/agents/issue-lifecycle.md`.
