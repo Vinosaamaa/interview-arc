@@ -14,11 +14,11 @@ type Options = {
 // Only local device voices are eligible. There is no remote/provider fallback.
 export function createDeviceLectureSpeech(options: Options) {
   let phase = "paused", index = options.chunkIndex, offset = options.characterOffset;
-  let epoch = 0, rate = 1, disposed = false, lastSave = 0, voiceURI = "";
+  let epoch = 0, rate = 1, disposed = false, cancelQueuedSaves = false, lastSave = 0, voiceURI = "";
   let saveTail: Promise<void> = Promise.resolve();
   let utterance: SpeechSynthesisUtterance | null = null;
   const cache = new Map<number, Promise<string>>();
-  const emit = (message = "") => options.onChange({ phase, chunkIndex: index, characterOffset: offset, message });
+  const emit = (message = "") => { if (!disposed) options.onChange({ phase, chunkIndex: index, characterOffset: offset, message }); };
   const voices = () => options.speech?.getVoices().filter(v => v.localService && v.lang.startsWith("en")) ?? [];
   const selectedVoice = () => {
     const available = voices();
@@ -40,7 +40,7 @@ export function createDeviceLectureSpeech(options: Options) {
   }
   function persist() {
     const savedIndex = index, savedOffset = offset;
-    saveTail = saveTail.then(() => options.savePosition(savedIndex, savedOffset));
+    saveTail = saveTail.then(() => { if (!cancelQueuedSaves) return options.savePosition(savedIndex, savedOffset); });
     // Retain the rejected chain: an unconfirmed save must block later writes.
     void saveTail.catch(fail);
     return saveTail;
@@ -81,13 +81,22 @@ export function createDeviceLectureSpeech(options: Options) {
   }
   const api = {
     async play() {
-      if (disposed || phase === "error" || phase === "playing") return;
-      if (phase === "finished") await api.seek(0);
+      if (disposed || ["error", "playing", "loading"].includes(phase)) return;
       const voice = selectedVoice();
       if (!voice) { phase = "unavailable"; emit("This host has no local English voice. No paid speech request was made."); return; }
       const token = ++epoch; phase = "loading"; emit("Opening the saved section…");
-      try { await saveTail; if (token !== epoch || disposed) return; phase = "playing"; lastSave = Date.now(); void step(token, voice); }
-      catch (error) { fail(error); }
+      try {
+        await saveTail;
+        const text = await load(index);
+        if (token !== epoch || disposed) return;
+        // A restored completed cursor has no in-memory "finished" phase.
+        // Restart only after an explicit Play, through the same revision guard.
+        if (index === options.chunkCount - 1 && offset >= text.length) {
+          index = 0; offset = 0; await persist();
+        }
+        if (token !== epoch || disposed) return;
+        phase = "playing"; lastSave = Date.now(); void step(token, voice);
+      } catch (error) { if (token === epoch) fail(error); }
     },
     async pause() {
       if (disposed || !["playing", "loading"].includes(phase)) return;
@@ -135,7 +144,9 @@ export function createDeviceLectureSpeech(options: Options) {
     setRate(value: number) { if (Number.isFinite(value) && value >= 0.5 && value <= 2 && rate !== value) { rate = value; restart(); } },
     setVoice(value: string) { if (voices().some(v => v.voiceURI === value)) { voiceURI = value; restart(); } },
     voices,
-    dispose() { disposed = true; epoch++; options.speech.cancel(); utterance = null; },
+    // Recovery must finish an already dispatched save before reading fresh state.
+    settled() { return saveTail.catch(() => {}); },
+    dispose(discardQueuedSaves = false) { cancelQueuedSaves = discardQueuedSaves; disposed = true; epoch++; options.speech.cancel(); utterance = null; },
   };
   return api;
 }

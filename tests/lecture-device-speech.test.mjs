@@ -39,6 +39,29 @@ test('embedded widget contains parseable device controller and no automatic paid
   assert.match(lecturePlayerHtml,/id="generate" hidden disabled/);
 });
 
+test('opening a saved completed lecture replays from the beginning', async()=>{
+  const f=fixture(['First section.','Last section.'],{chunkIndex:1,characterOffset:13});
+  await f.player.play();await tick();
+  assert.equal(f.spoken[0],'First section.');assert.deepEqual(f.saved[0],[0,0]);
+});
+
+test('disposing waits for an in-flight save and cancels queued writes before fresh recovery', async()=>{
+  let release;const writes=[];
+  const f=fixture(['First sentence. Second sentence.'],{savePosition:async(i,o)=>{writes.push([i,o]);await new Promise(r=>{release=r;});}});
+  await f.player.play();await tick();
+  const paused=f.player.pause();await tick();
+  const seek=f.player.seek(0,16);await tick();
+  f.player.dispose(true);let settled=false;const drained=f.player.settled().then(()=>{settled=true;});
+  await tick();assert.equal(settled,false);release();await Promise.all([paused,seek,drained]);
+  assert.deepEqual(writes,[[0,0]]);assert.equal(f.spoken.length,1);
+});
+
+test('normal unmount still saves the last pause boundary',async()=>{
+  const f=fixture(['First sentence.']);await f.player.play();await tick();
+  f.queue[0].onboundary({charIndex:6});const paused=f.player.pause();f.player.dispose();await paused;
+  assert.deepEqual(f.saved,[[0,6]]);
+});
+
 test('transcript segments preserve original whitespace, code and punctuation',()=>{
   for(const text of ['Hello. Next!\n\nKeep  spaces,\ttabs and code: x += 1;\nlast line','...','No punctuation','\n\n','']){
     const segments=lectureTranscriptSegments(text);assert.equal(segments.map(s=>s.text).join(''),text);

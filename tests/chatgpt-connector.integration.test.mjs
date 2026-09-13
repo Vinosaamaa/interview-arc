@@ -96,7 +96,7 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     assert.equal(inChatAudio.status, 206);
     assert.equal((await inChatAudio.arrayBuffer()).byteLength, 10);
     assert.equal((await fetch(localTicketUrl, { method: "POST" })).status, 405);
-    const playerWidget = await client.readResource({ uri: "ui://interview-arc/lecture-player-v3.html" });
+    const playerWidget = await client.readResource({ uri: "ui://interview-arc/lecture-player-v4.html" });
     const filePicker = await client.callTool({ name: "open_study_resource_uploader", arguments: {} });
     assert.equal(filePicker.isError, undefined, JSON.stringify(filePicker));
     const fileWidget = await client.readResource({ uri: "ui://interview-arc/study-resource-uploader-v2.html" });
