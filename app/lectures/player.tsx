@@ -127,10 +127,9 @@ function ProfessorPlayer({ id }: { id: string }) {
     return () => { for (const name of ["play", "pause", "seekto", "seekbackward", "seekforward"] as const) mediaHandler(name, null); navigator.mediaSession.metadata = null; };
   }, [lecture, complete, duration]);
   if (!lecture) return <p role="status">{error || "Loading your lecture…"}</p>;
-  const ready = lecture.chunks.filter(chunk => chunk.audio?.state === "ready").length;
   return <article className="professor-player">
-    <p className="lecture-eyebrow">Professor mode · AI-generated voice</p><h2>{lecture.title}</h2>
-    <div className="lecture-facts"><span><strong>{complete ? clock(duration) : `${lecture.estimatedMinutes} min`}</strong>{complete ? "Measured audio" : "Script estimate"}</span><span><strong>60 min</strong>Requested lesson</span><span><strong>{ready}/{lecture.chunks.length}</strong>Audio parts ready</span></div>
+    <h2>{lecture.title}</h2>
+    <p className="lecture-note">{lecture.chunks.length} {lecture.chunks.length === 1 ? "section" : "sections"} · {complete ? clock(duration) : lecture.estimatedMinutes < 1 ? "Under a minute" : `${lecture.estimatedMinutes} min estimated`}</p>
     {error ? <p role="alert" className="lecture-error">{error} <button className="lecture-secondary" onClick={() => window.location.reload()}>Reload saved position</button></p> : null}
     {!complete ? <DeviceLecturePlayer lecture={lecture} onPlay={() => audio.current?.pause()} /> : null}
     {complete && duration < 3600 ? <p className="lecture-note">This recording is {clock(duration)}, shorter than the requested hour. Ask ChatGPT to expand the lecture and save a new version.</p> : null}
@@ -145,10 +144,10 @@ function ProfessorPlayer({ id }: { id: string }) {
       <div className="lecture-time"><span>{clock(position)} / {clock(duration)}</span><label>Speed <select value={rate} onChange={event => { const rate = Number(event.target.value); setRate(rate); if (audio.current) audio.current.playbackRate = rate; }}>{[0.75, 1, 1.25, 1.5].map(rate => <option key={rate} value={rate}>{rate}×</option>)}</select></label><span role="status">{saveStatus}</span></div>
       <p className="lecture-note">Pause here before asking a question in ChatGPT. Use this lecture’s saved position there, then return here to resume. ChatGPT voice starts manually.</p>
     </> : null}
-    <h3>Follow the lesson</h3><ol className="lecture-chapters">{lecture.chunks.map(chunk => {
+    {complete ? <><h3>Follow the lesson</h3><ol className="lecture-chapters">{lecture.chunks.map(chunk => {
       const start = lecture.chunks.slice(0, chunk.index).reduce((sum, part) => sum + (part.audio?.duration_seconds ?? 0), 0);
       return <li key={chunk.index}><button onClick={() => { if (complete) seek(start); void fetch(`/api/lectures?id=${encodeURIComponent(id)}&chunk=${chunk.index}`, { cache: "no-store" }).then(json<Lecture>).then(value => { if (mounted.current) setExcerpt(value.fragment.text); }).catch(error => setError(error.message)); }}><span>{chunk.sectionTitle}</span><small>{complete ? clock(start) : `Part ${chunk.index + 1}`}</small></button></li>;
-    })}</ol><details className="lecture-script"><summary>Read the current script section</summary><p>{excerpt}</p></details>
+    })}</ol><details className="lecture-script"><summary>Read the current script section</summary><p>{excerpt}</p></details></> : null}
     <details><summary>References</summary><ul>{lecture.sources.map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noreferrer">{source.label}</a></li>)}</ul></details>
   </article>;
 }

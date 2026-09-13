@@ -8,7 +8,7 @@ recorded user speech; Learn Voice remains transcript-only.
 
 ## In-chat playback
 
-Default to **Play free on this device**. The owner requires speech without paid
+Default to the free **Play lecture** control. The owner requires speech without paid
 API credit. The widget and website use the same device-speech controller and
 only voices whose browser `localService` flag is true. No PC service, tunnel,
 external speech API or paid fallback is involved. ChatGPT prepares the original
@@ -21,7 +21,18 @@ owner-scoped section ahead through `get_practice_lecture`. Short utterances reta
 every character and advance automatically without another model turn. Word
 boundary events, or the start of the current sentence when unavailable, supply
 the resume offset. Pause and chapter changes save acknowledged cursor revisions;
-save conflicts stop playback. No seconds-to-text alignment is invented.
+save conflicts stop playback. The transcript preserves every character and exposes
+bounded previous/next sections. Tapping a passage saves and starts at its original
+character offset. Scrolling disables automatic following until explicitly resumed.
+Tap toggles playback, double-tap left/right skips, and holding applies temporary
+2x speed until release, cancellation or loss of focus. Keyboard activation and
+arrow-key skipping remain available. Voice selection lists actual local English
+voices; a selected voice or speed takes effect at the last reported boundary.
+
+Device-speech five-second skips are explicitly approximate, using ten words at
+the existing 120-word-per-minute estimate. They are not measured timestamps.
+Prepared recordings skip exactly five audio seconds; their transcript alignment
+remains approximate because no word-level timestamps were recorded.
 
 Free device speech does not create a downloadable audio file or a measured full
 recording. A one-hour script estimate remains an estimate, and voice speed varies

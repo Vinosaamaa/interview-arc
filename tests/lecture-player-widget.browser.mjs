@@ -29,7 +29,7 @@ try{
  await page.goto('http://127.0.0.1:'+server.address().port);
  const frame=page.frameLocator('iframe');
 
- await frame.getByText('Audio ready. Press Play.',{exact:true}).waitFor();
+ await frame.getByRole('button',{name:'Play lecture',exact:true}).waitFor();
  assert.deepEqual(await page.evaluate(()=>window.testState().generated),[]);
  const child=page.frames().find(f=>f.url().endsWith('/widget'));
  await child.waitForFunction(()=>document.querySelector('audio').readyState>=1);
@@ -43,7 +43,8 @@ try{
  await child.evaluate(()=>document.querySelector('audio').pause());
  await page.waitForFunction(()=>window.testState().position>3);
  const saved=await page.evaluate(()=>window.testState().position);
- await frame.getByRole('button',{name:'Refresh / reconnect'}).click();
+ await frame.getByText('Voice & playback',{exact:true}).click();
+ await frame.getByRole('button',{name:'Reconnect player'}).click();
  await child.waitForFunction(p=>Math.abs(document.querySelector('audio').currentTime-p)<.1,saved);
  await child.evaluate(()=>document.querySelector('audio').play());
  await child.waitForFunction(()=>document.querySelector('audio').ended);

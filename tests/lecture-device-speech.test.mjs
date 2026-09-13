@@ -3,6 +3,7 @@ import { Script } from 'node:vm';
 import test from 'node:test';
 import { createDeviceLectureSpeech } from '../lib/lecture-device-speech.ts';
 import { lecturePlayerHtml } from '../mcp-worker/lecture-player-widget.ts';
+import { lectureTranscriptSegments } from '../lib/lecture-transcript.ts';
 
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(chunks, extra={}) {
@@ -36,4 +37,32 @@ test('embedded widget contains parseable device controller and no automatic paid
   new Script(lecturePlayerHtml.match(/<script>([\s\S]*)<\/script>/)[1]);
   assert.match(lecturePlayerHtml,/Play free on this device/);
   assert.match(lecturePlayerHtml,/id="generate" hidden disabled/);
+});
+
+test('transcript segments preserve original whitespace, code and punctuation',()=>{
+  for(const text of ['Hello. Next!\n\nKeep  spaces,\ttabs and code: x += 1;\nlast line','...','No punctuation','\n\n','']){
+    const segments=lectureTranscriptSegments(text);assert.equal(segments.map(s=>s.text).join(''),text);
+    for(const s of segments)assert.equal(text.slice(s.start,s.end),s.text);
+  }
+});
+test('transcript seek starts at selected original text, rejects stale callbacks and replays after finish',async()=>{
+  const f=fixture(['First sentence. Selected passage.']);await f.player.play();await tick();const old=f.queue.shift();
+  await f.player.seek(0,16,true);await tick();assert.equal(f.spoken.at(-1),'Selected passage.');
+  old.onend();assert.deepEqual(f.saved.at(-1),[0,16]);f.queue.shift().onend();await tick();
+  assert.equal(f.states.at(-1).phase,'finished');await f.player.play();await tick();assert.equal(f.spoken.at(-1),'First sentence. ');
+});
+test('estimated skips cross chunk boundaries and clamp to the original text',async()=>{
+  const f=fixture(['one two three four five ','six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen']);
+  await f.player.skip(5);assert.deepEqual(f.saved.at(-1),[1,25]);
+  await f.player.skip(-5);assert.deepEqual(f.saved.at(-1),[0,0]);
+  await f.player.skip(-5);assert.deepEqual(f.saved.at(-1),[0,0]);
+  await f.player.skip(60);assert.deepEqual(f.saved.at(-1),[1,72]);
+});
+test('speed and voice changes immediately restart at the reported boundary',async()=>{
+  const available=[{voiceURI:'default',name:'Default',lang:'en-US',localService:true},{voiceURI:'enhanced',name:'Enhanced',lang:'en-US',localService:true}];
+  const queued=[];const f=fixture(['First words here.'],{speech:{getVoices:()=>available,speak:u=>queued.push(u),cancel(){}}});
+  await f.player.play();await tick();assert.equal(queued.at(-1).voice.voiceURI,'enhanced');queued.at(-1).onboundary({charIndex:6});
+  f.player.setRate(2);await tick();assert.equal(queued.at(-1).rate,2);assert.equal(queued.at(-1).text,'words here.');
+  f.player.setRate(1.25);await tick();assert.equal(queued.at(-1).rate,1.25);
+  f.player.setVoice('default');await tick();assert.equal(queued.at(-1).voice.voiceURI,'default');
 });

@@ -17,9 +17,9 @@ Record deployed commits and the host/browser/app version before testing.
 | Read an image and a PDF diagram/scanned page | Assistant identifies synthetic visual details using actual image/page output; missing support is explicit | Pending actual host |
 | Ask for an activity based on a source | Question is created/reused, activity appears in Today, exact source links survive reread | Pending actual host |
 | Upload a changed version and retry an interrupted upload | Earlier original remains; exact retry avoids duplicate resources | Pending actual host |
-| Ask ChatGPT to prepare a one-hour lecture and open its player | Script saved and the real widget renders free playback controls in the conversation | Actual ChatGPT opened the existing 43-word smoke-test player. A legacy generation attempt returned HTTP 429. Free device speech is implemented in PR #479; actual ChatGPT acceptance remains pending. |
+| Ask ChatGPT to prepare a one-hour lecture and open its player | Script saved and the real widget renders free playback controls in the conversation | PR #479 released. Actual ChatGPT opened and completed the existing 43-word smoke test using installed-device speech. Full one-hour preparation and playback remain pending. |
 | Play prepared speech for 60 minutes in the ChatGPT conversation | Measured listening duration, uninterrupted playback across all parts, no next-message prompts or navigation to Arc | Pending actual host/provider |
-| Pause, close/reopen player and seek | Confirmed saved position resumes; expired media access refreshes | Pending actual host |
+| Pause, close/reopen player and seek | Confirmed saved position resumes; expired media access refreshes | Actual ChatGPT paused at character 272/revision 1, refreshed, resumed at 272, and completed at character 282/revision 2. Full close/reopen and expired recording access remain separate checks. |
 | Repeat on mobile, including app background and screen lock | Record each actual outcome separately; desktop success does not imply mobile success | Pending physical device |
 
 For any failure, record the visible symptom, tool result where available,
@@ -65,6 +65,13 @@ device with no PC connection. The built website and isolated iframe completed
 two sections with an installed voice; website pause/resume and section selection
 also passed. This is local acceptance, not proof of actual ChatGPT playback,
 one-hour duration, physical mobile background playback or screen-lock continuity.
+
+After PR #479 released as `14f9e91a020c9371266f9167713e7f229191441c`, a fresh
+actual ChatGPT conversation loaded the v2 player and completed installed-device
+speech. Pause, refresh and resumed completion were observed as recorded above.
+The host's CSP was already disabled, so strict-CSP acceptance remains unverified.
+The mobile-controls follow-up adds passage navigation, full original transcript
+sections and touch gestures; its isolated-host tests are not physical phone proof.
 
 
 ## Local integration observations
