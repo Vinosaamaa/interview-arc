@@ -105,6 +105,13 @@ Physical mobile background and lock-screen behavior require device acceptance.
 
 ## ChatGPT boundary
 
+Position conflicts stop playback without overwriting newer progress. The player
+shows a visible Reload saved position action. Recovery drains dispatched saves,
+discards blocked pending operations and reads fresh owner-scoped state before
+enabling Play. Reload does not seek or autoplay. An explicit Play at the end of
+a saved script restarts at the beginning through the existing revision guard.
+Failed reloads remain retryable; transport exception wrappers are not user copy.
+
 The connector exposes list_practice_lectures, save_practice_lecture,
 get_practice_lecture and save_lecture_position. Connected text retrieves the
 same immutable sections and confirmed cursor as the player. Tool availability

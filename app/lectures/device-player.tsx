@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createDeviceLectureSpeech, type DeviceSpeechState } from "../../lib/lecture-device-speech";
 import { attachLectureGestures } from "../../lib/lecture-player-gestures";
 import { lectureTranscriptSegments } from "../../lib/lecture-transcript";
+import { lecturePlaybackError } from "../../lib/lecture-playback-error";
 import type { readLecture } from "../../db/lectures";
 
 type Lecture = Awaited<ReturnType<typeof readLecture>>;
@@ -90,7 +91,8 @@ export function DeviceLecturePlayer({ lecture, onPlay }: { lecture: Lecture; onP
     <div className="device-position"><span>{lecture.chunks[state.chunkIndex]?.sectionTitle}</span><span>{Math.round(progress)}%</span></div>
     <div className="device-transport"><button aria-label="Back about five seconds" onClick={() => void controller.current?.skip(-5)}>−5s</button><select aria-label="Playback speed" defaultValue="1" onChange={event => { rate.current = Number(event.target.value); controller.current?.setRate(rate.current); }}>{[0.75, 1, 1.25, 1.5, 2].map(value => <option key={value} value={value}>{value}×</option>)}</select><button aria-label="Forward about five seconds" onClick={() => void controller.current?.skip(5)}>+5s</button></div>
     <small>Tap to play / pause · Double-tap sides to skip · Hold for 2×</small><small>Device-voice skips are approximate.</small>
-    <p role="status">{["error", "unavailable"].includes(state.phase) ? state.message : !voices.length ? "No installed English voice is available in this browser." : state.phase === "finished" ? "Finished. Tap to listen again." : feedback}</p>
+    <p role="status">{["error", "unavailable"].includes(state.phase) ? lecturePlaybackError(state.message) : !voices.length ? "No installed English voice is available in this browser." : state.phase === "finished" ? "Finished. Tap to listen again." : feedback}</p>
+    {state.phase === "error" ? <button onClick={() => window.location.reload()}>Reload saved position</button> : null}
     <div className="device-transcript-heading"><strong>Transcript</strong><button aria-pressed={follow} onClick={() => setFollow(!follow)}>{follow ? "Following" : "Follow playback"}</button></div>
     <small>Tap a passage to play from there.</small>
     <div className="device-transcript" ref={transcript} tabIndex={0} aria-label="Lecture transcript" onWheel={() => browse(shownIndex)} onTouchMove={() => browse(shownIndex)} onKeyDown={event => { if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key)) browse(shownIndex); }}>
