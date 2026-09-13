@@ -35,17 +35,20 @@ function rememberContinueMessage(){try{window.openai?.setWidgetState?.({...windo
 $('editContinue').onclick=()=>{const open=$('continueEditor').hidden;$('continueEditor').hidden=!open;$('editContinue').setAttribute('aria-expanded',String(open));if(open)$('continueMessage').focus();};
 $('continueMessage').onchange=rememberContinueMessage;
 $('resetContinue').onclick=()=>{$('continueMessage').value='Continue';rememberContinueMessage();};
-$('continue').onclick=async()=>{
+async function sendContinueMessage(){
  if(continuing)return;
  const text=$('continueMessage').value;
  if(!text.trim()||text.length>4000){$('continueStatus').textContent='Enter a message of 1–4,000 characters.';$('continueEditor').hidden=false;$('editContinue').setAttribute('aria-expanded','true');$('continueMessage').focus();return;}
  continuing=true;$('continue').disabled=true;$('continue').textContent='Sending…';$('continueStatus').textContent='';
- audio.pause();if(['playing','loading'].includes(devicePhase))void device?.pause().catch(error);
+ audio.pause();
+ await device?.pause().catch(error);await device?.settled();
+ if(saving)await saving.catch(()=>{});
  rememberContinueMessage();
  try{const result=await request('ui/message',{role:'user',content:[{type:'text',text}]},15000);if(result?.isError)throw Error('Message rejected');$('continueStatus').textContent='Sent to ChatGPT.';}
  catch{$('continueStatus').textContent='Could not confirm sending. Check the chat before retrying, or copy your message into it.';}
  finally{continuing=false;$('continue').disabled=false;$('continue').textContent='Continue';}
-};
+}
+$('continue').onclick=sendContinueMessage;
 let device=null,devicePhase='paused',deviceSave=null,recording=false,characterStarts=[0];
 function updateTransport(phase,index=currentTextState.chunkIndex,offset=currentTextState.characterOffset){const active=['playing','loading'].includes(phase);$('touchPlayer').setAttribute('aria-label',active?'Pause lecture':phase==='finished'?'Replay lecture':'Play lecture');$('playIcon').toggleAttribute('hidden',active);$('pauseIcon').toggleAttribute('hidden',!active);$('chapterLabel').textContent=lecture?.chunks[index]?.sectionTitle||'Ready';if(!recording&&lecture){const total=characterStarts[characterStarts.length-1],before=characterStarts[index]||0;const progress=total?Math.min(100,100*(before+offset)/total):0;$('timeline').value=progress;$('elapsed').textContent=Math.round(progress)+'%';}if(['error','unavailable'].includes(phase))$('touchPlayer').disabled=true;}
 function toggle(){if(recovering)return;if(recording){if(audio.paused)audio.play().catch(error);else audio.pause();}else if(['playing','loading'].includes(devicePhase))void device?.pause().catch(error);else void device?.play().catch(error);}

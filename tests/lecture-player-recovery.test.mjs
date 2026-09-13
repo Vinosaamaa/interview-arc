@@ -17,14 +17,14 @@ function fixture(options={}){
   const document=Object.assign(new EventTarget(),{getElementById:get,querySelector:get,createElement:()=>new Element()});
   const window=new EventTarget(),spoken=[],calls=[],messages=[];
   get('continueMessage').value='Continue';
-  let savedState=options.widgetState??{unrelated:'preserved'},replyToMessage;
+  let savedState=options.widgetState??{unrelated:'preserved'},replyToMessage,releaseSave;
   window.openai={widgetState:savedState,setWidgetState(state){savedState=state;window.openai.widgetState=state;}};
   const speech={getVoices:()=>[{voiceURI:'local',name:'Local',localService:true,lang:'en-US'}],speak:u=>spoken.push(u.text),cancel(){},addEventListener(){}};
   const text='First sentence. Second sentence.';
   let revision=1,offset=0,readFails=false;
   const payload=()=>({structuredContent:{ready:false,speechConfigured:false,lecture:{lectureId:'isolated-recovery',title:'Recovery',estimatedMinutes:1,fingerprint:'test',cursor:{revision,chunkIndex:0,characterOffset:offset,offsetSeconds:0},chunks:[{index:0,sectionId:'a',sectionTitle:'Section',characterCount:text.length}]}},_meta:{scriptFragment:{index:0,text}}});
   function message(data){const event=new Event('message');Object.assign(event,{data,source:window.parent});window.dispatchEvent(event);}
-  window.parent={postMessage(m){if(!m.id)return;queueMicrotask(()=>{
+  window.parent={postMessage(m){if(!m.id)return;queueMicrotask(async()=>{
     if(m.method==='ui/initialize'){message({jsonrpc:'2.0',id:m.id,result:{}});queueMicrotask(()=>message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:payload()}));return;}
     if(m.method==='ui/message'){messages.push(JSON.parse(JSON.stringify(m.params)));replyToMessage=(result={},error)=>message({jsonrpc:'2.0',id:m.id,result,error});if(!options.holdMessage)replyToMessage(options.messageResult??{});return;}
     const {name,arguments:a}=m.params;calls.push({name,...a});let result={};
@@ -32,6 +32,7 @@ function fixture(options={}){
       if(readFails){message({jsonrpc:'2.0',id:m.id,error:{message:'Connection unavailable. Try reloading again.'}});return;}
       result=payload();
     }else if(name==='save_lecture_position'){
+      if(options.holdSave)await new Promise(resolve=>{releaseSave=resolve;});
       if(a.expectedRevision!==revision){message({jsonrpc:'2.0',id:m.id,error:{message:"INVALID_ARGUMENT RuntimeException TextContent(text='The saved position changed in another player or chat. Reload it before resuming; no position was overwritten.')"}});return;}
       revision++;offset=a.characterOffset;result={structuredContent:{revision}};
     }
@@ -39,7 +40,7 @@ function fixture(options={}){
   });}};
   Object.assign(window,{speechSynthesis:speech,SpeechSynthesisUtterance:function(t){this.text=t;}});
   runInNewContext(lecturePlayerHtml.match(/<script>([\s\S]*)<\/script>/)[1],{window,document,SpeechSynthesisUtterance:window.SpeechSynthesisUtterance,ResizeObserver:class{observe(){}},setTimeout,clearTimeout,crypto,URL,Error});
-  return {get,spoken,calls,messages,text,reply:(...args)=>replyToMessage(...args),savedState:()=>savedState,externalSave(n){revision++;offset=n;},failRead(v){readFails=v;},state:()=>({revision,offset})};
+  return {get,spoken,calls,messages,text,reply:(...args)=>replyToMessage(...args),releaseSave:()=>releaseSave(),savedState:()=>savedState,externalSave(n){revision++;offset=n;},failRead(v){readFails=v;},state:()=>({revision,offset})};
 }
 
 test('stale ChatGPT tool snapshot can reload safely, retry a failed read, then play',async()=>{
@@ -97,4 +98,14 @@ test('unsupported host method is a readable failure with no automatic fallback s
   f.reply(undefined,{code:-32601,message:'Method not found'});await sending;
   assert.equal(f.messages.length,1);assert.equal(f.get('continue').disabled,false);
   assert.match(f.get('continueStatus').textContent,/copy your message/);
+});
+
+test('Continue waits for the paused playback position before sending a follow-up',async()=>{
+  const f=fixture({holdSave:true});await tick();
+  const event=new Event('click');Object.assign(event,{detail:0});f.get('touchPlayer').dispatchEvent(event);await tick();
+  assert.equal(f.spoken.length,1);
+  const sending=f.get('continue').onclick();await tick();
+  assert.equal(f.calls.filter(c=>c.name==='save_lecture_position').length,1);
+  assert.equal(f.messages.length,0,'Host cannot remount the widget before the pause save settles');
+  f.releaseSave();await sending;assert.equal(f.messages.length,1);
 });
