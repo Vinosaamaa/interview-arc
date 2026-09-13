@@ -71,8 +71,7 @@ correctness bar for the changed behavior.
     guarded issue-worktree and branch cleanup required by this repository's
     `AGENTS.md`; preserve the worktree if ownership, cleanliness, ancestry,
     publication, merge, or release evidence is incomplete. Report the outcome,
-    exact receipt or failure, rollback point, cleanup result, and compact
-    execution ledger. Do not narrate routine command plumbing.
+    exact receipt or failure, rollback point, and cleanup result. Do not narrate routine command plumbing.
 
 ## Stop or escalate
 

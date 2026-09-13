@@ -56,8 +56,8 @@ Implementation PRs: `interview-arc#159` and `interview-arc-voice#171`.
 
 ## Required next steps
 
-1. Ensure both PRs use `Refs #157` / `Refs #64`, cross-link each other, list
-   exact tests actually run, and include chronological execution ledgers.
+1. Ensure both PRs use `Refs #157` / `Refs #64`, cross-link each other, and list
+   exact tests actually run.
 2. Require both repository CI suites to pass.
 3. Deploy the Worker/migration first, reconnect MCP, and
    verify discovery of the batch resolver, blocker read, repair, singular
