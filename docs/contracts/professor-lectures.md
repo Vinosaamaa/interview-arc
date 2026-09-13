@@ -105,6 +105,14 @@ Physical mobile background and lock-screen behavior require device acceptance.
 
 ## ChatGPT boundary
 
+The in-chat card has a Continue button. Its default message is exactly
+`Continue`; Edit message changes the complete outgoing text, with no appended
+instructions or lesson metadata. A deliberate click sends one `ui/message`
+request. Pending clicks are suppressed, and failures never trigger an automatic
+retry. The editor retains the draft in host widget state when available without
+changing the saved lecture. This sends a chat follow-up; it cannot detect a
+native Live turn ending, open a native permission prompt, or force spoken output.
+
 Position conflicts stop playback without overwriting newer progress. The player
 shows a visible Reload saved position action. Recovery drains dispatched saves,
 discards blocked pending operations and reads fresh owner-scoped state before
