@@ -3,7 +3,7 @@ schemaVersion: 1
 id: change-note-lecture-transcript-controls
 revision: 1
 type: change-note
-status: accepted
+status: released
 title: Navigate lectures with touch controls and original transcripts
 repository: interview-arc
 capabilityIds: ["learning-workspace"]

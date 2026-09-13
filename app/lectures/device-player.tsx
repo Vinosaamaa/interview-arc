@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createDeviceLectureSpeech, type DeviceSpeechState } from "../../lib/lecture-device-speech";
 import { attachLectureGestures } from "../../lib/lecture-player-gestures";
 import { lectureTranscriptSegments } from "../../lib/lecture-transcript";
@@ -16,7 +16,6 @@ export function DeviceLecturePlayer({ lecture, onPlay }: { lecture: Lecture; onP
   const [transcriptData, setTranscriptData] = useState({ index: lecture.fragment.index, text: lecture.fragment.text, error: false });
   const [state, setState] = useState<DeviceSpeechState>({ phase: "paused", chunkIndex: lecture.cursor.chunkIndex, characterOffset: lecture.cursor.characterOffset, message: "Ready for free playback on this device." });
   useEffect(() => {
-    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
     let revision = lecture.cursor.revision;
     let pending: object | null = null;
     const cache = new Map<number, Promise<string>>();
@@ -30,6 +29,7 @@ export function DeviceLecturePlayer({ lecture, onPlay }: { lecture: Lecture; onP
       })());
       return cache.get(index)!;
     };
+    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
     controller.current = createDeviceLectureSpeech({
       speech: window.speechSynthesis, makeUtterance: text => new SpeechSynthesisUtterance(text),
       chunkCount: lecture.chunks.length, chunkIndex: lecture.cursor.chunkIndex, characterOffset: lecture.cursor.characterOffset,
@@ -63,6 +63,12 @@ export function DeviceLecturePlayer({ lecture, onPlay }: { lecture: Lecture; onP
   }, [onPlay]);
   const shownIndex = follow ? state.chunkIndex : viewIndex;
   const text = transcriptData.index === shownIndex ? transcriptData.text : "";
+  const segments = useMemo(() => lectureTranscriptSegments(text), [text]);
+  const characterStarts = useMemo(() => {
+    const starts = [0];
+    for (const chunk of lecture.chunks) starts.push(starts[starts.length - 1] + chunk.characterCount);
+    return starts;
+  }, [lecture.chunks]);
   useEffect(() => {
     let stale = false;
     void loadText.current(shownIndex).then(value => { if (!stale) setTranscriptData({ index: shownIndex, text: value, error: false }); }).catch(() => { if (!stale) setTranscriptData({ index: shownIndex, text: "Transcript could not load. Reopen the lesson to retry.", error: true }); });
@@ -73,8 +79,8 @@ export function DeviceLecturePlayer({ lecture, onPlay }: { lecture: Lecture; onP
     if (follow && box && active && (active.offsetTop < box.scrollTop || active.offsetTop + active.offsetHeight > box.scrollTop + box.clientHeight)) box.scrollTop = Math.max(0, active.offsetTop - box.clientHeight / 3);
   }, [state.characterOffset, follow, text]);
   const active = ["playing", "loading"].includes(state.phase);
-  const counts = lecture.chunks.map(chunk => chunk.characterCount), total = counts.reduce((a, b) => a + b, 0);
-  const progress = total ? 100 * (counts.slice(0, state.chunkIndex).reduce((a, b) => a + b, 0) + state.characterOffset) / total : 0;
+  const total = characterStarts[characterStarts.length - 1];
+  const progress = total ? 100 * (characterStarts[state.chunkIndex] + state.characterOffset) / total : 0;
   const browse = (index: number) => { setViewIndex(index); setFollow(false); };
   return <section aria-label="Free device lecture player" className="device-reader">
     <button ref={touch} className="device-touch" aria-label={active ? "Pause lecture" : state.phase === "finished" ? "Replay lecture" : "Play lecture"} disabled={!voices.length || state.phase === "error"}>
@@ -88,7 +94,7 @@ export function DeviceLecturePlayer({ lecture, onPlay }: { lecture: Lecture; onP
     <div className="device-transcript-heading"><strong>Transcript</strong><button aria-pressed={follow} onClick={() => setFollow(!follow)}>{follow ? "Following" : "Follow playback"}</button></div>
     <small>Tap a passage to play from there.</small>
     <div className="device-transcript" ref={transcript} tabIndex={0} aria-label="Lecture transcript" onWheel={() => browse(shownIndex)} onTouchMove={() => browse(shownIndex)} onKeyDown={event => { if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key)) browse(shownIndex); }}>
-      {!text ? <p>Loading transcript…</p> : transcriptData.error ? <p>{text}</p> : lectureTranscriptSegments(text).map(part => <button key={`${shownIndex}-${part.start}`} aria-current={shownIndex === state.chunkIndex && part.start <= state.characterOffset && part.end > state.characterOffset} onClick={() => { setFollow(true); onPlay(); void controller.current?.seek(shownIndex, part.start, true); }}>{part.text}</button>)}
+      {!text ? <p>Loading transcript…</p> : transcriptData.error ? <p>{text}</p> : segments.map(part => <button key={`${shownIndex}-${part.start}`} aria-current={shownIndex === state.chunkIndex && part.start <= state.characterOffset && part.end > state.characterOffset} onClick={() => { setFollow(true); onPlay(); void controller.current?.seek(shownIndex, part.start, true); }}>{part.text}</button>)}
     </div>
     <div className="device-transcript-heading"><button disabled={shownIndex === 0} onClick={() => browse(shownIndex - 1)}>Previous</button><small>{shownIndex + 1} / {lecture.chunks.length}</small><button disabled={shownIndex === lecture.chunks.length - 1} onClick={() => browse(shownIndex + 1)}>Next</button></div>
     <details><summary>Voice &amp; chapters</summary><label>Voice on this device<select value={voice || undefined} onChange={event => { voiceChoice.current = event.target.value; setVoice(event.target.value); controller.current?.setVoice(event.target.value); }}>{voices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name} · {v.lang}</option>)}</select></label><label>Start at section<select value={state.chunkIndex} onChange={event => void controller.current?.seek(Number(event.target.value))}>{lecture.chunks.map(chunk => <option key={chunk.index} value={chunk.index}>{chunk.sectionTitle}</option>)}</select></label><small>Only installed voices exposed by this browser appear here. Keep the player open; background playback depends on your device.</small></details>
