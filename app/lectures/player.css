@@ -332,6 +332,30 @@
 .lecture-library h1,.professor-player h2,.lecture-empty h2 {
   font-family:Georgia,serif
 }
+.device-reader {color:var(--ink,#102a2a);margin-top:20px}
+.device-reader button,.device-reader select,.device-reader summary {min-height:44px;font:inherit}
+.device-reader button,.device-reader select {border:1px solid #c8d8d3;border-radius:8px;background:#fbfcfa;color:#102a2a;padding:8px 12px;cursor:pointer}
+.device-reader button:disabled {opacity:.45;cursor:default}
+.device-reader button:focus-visible,.device-reader select:focus-visible,.device-reader summary:focus-visible,.device-transcript:focus-visible {outline:3px solid #0f5f5a;outline-offset:3px}
+.device-reader .device-touch {display:flex;justify-content:space-around;align-items:center;width:100%;height:140px;border:0;border-radius:14px;background:#edf3f1;touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;margin-bottom:16px}
+.device-touch>span {font-size:14px;color:#526962}
+.device-touch .device-play-icon {display:grid;place-items:center;width:76px;height:76px;background:#0f5f5a;border-radius:50%;color:white}
+.device-play-icon svg {width:28px;height:28px;stroke:currentColor;stroke-width:2;fill:currentColor}
+.device-reader progress {display:block;width:100%;height:5px;accent-color:#0f5f5a}
+.device-position,.device-transcript-heading {display:flex;justify-content:space-between;align-items:center;gap:12px}
+.device-position {font-size:12px;color:#526962;margin-top:8px}
+.device-transport {display:flex;justify-content:center;align-items:center;gap:14px;margin:18px 0}
+.device-reader>small {display:block;color:#526962;font-size:12px}
+.device-reader>p {font-size:14px;min-height:20px}
+.device-transcript-heading {margin-top:12px}
+.device-transcript-heading button {border:0;font-size:12px;background:transparent}
+.device-transcript {max-height:260px;overflow:auto;overscroll-behavior:contain;position:relative;margin:12px -8px;padding:0 8px;scrollbar-width:thin}
+.device-transcript button {display:block;width:100%;border:0;text-align:left;white-space:pre-wrap;background:transparent;color:#526962;font-size:16px;line-height:1.65;padding:10px 12px}
+.device-transcript button[aria-current=true] {background:#edf3f1;color:#102a2a;font-weight:600}
+.device-reader details {border-top:1px solid #c8d8d3;margin-top:12px;padding-top:8px}
+.device-reader summary {display:flex;align-items:center;cursor:pointer}
+.device-reader label {display:grid;gap:6px;margin:12px 0}
+.device-reader select {max-width:100%;text-overflow:ellipsis}
 @media(max-width:760px) {
   .lecture-layout:has(.professor-player) .lecture-main {
   grid-row:1

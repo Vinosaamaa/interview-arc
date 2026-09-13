@@ -14,11 +14,21 @@ type Options = {
 // Only local device voices are eligible. There is no remote/provider fallback.
 export function createDeviceLectureSpeech(options: Options) {
   let phase = "paused", index = options.chunkIndex, offset = options.characterOffset;
-  let epoch = 0, rate = 1, disposed = false, lastSave = 0;
+  let epoch = 0, rate = 1, disposed = false, lastSave = 0, voiceURI = "";
   let saveTail: Promise<void> = Promise.resolve();
   let utterance: SpeechSynthesisUtterance | null = null;
   const cache = new Map<number, Promise<string>>();
   const emit = (message = "") => options.onChange({ phase, chunkIndex: index, characterOffset: offset, message });
+  const voices = () => options.speech?.getVoices().filter(v => v.localService && v.lang.startsWith("en")) ?? [];
+  const selectedVoice = () => {
+    const available = voices();
+    return available.find(v => v.voiceURI === voiceURI) ?? available.find(v => /premium|enhanced|natural/i.test(v.name)) ?? available.find(v => v.default) ?? available[0];
+  };
+  function restart() {
+    const voice = selectedVoice();
+    if (phase !== "playing" || !voice || disposed) return;
+    const token = ++epoch; options.speech.cancel(); void step(token, voice);
+  }
   const load = (n: number) => {
     if (!cache.has(n)) cache.set(n, options.loadChunk(n));
     return cache.get(n)!;
@@ -69,10 +79,11 @@ export function createDeviceLectureSpeech(options: Options) {
       if (next < options.chunkCount) void load(next).catch(() => cache.delete(next));
     } catch (error) { if (token === epoch) fail(error); }
   }
-  return {
+  const api = {
     async play() {
-      if (disposed || phase === "error" || phase === "finished" || phase === "playing") return;
-      const voice = options.speech?.getVoices().find(v => v.localService && v.lang.startsWith("en"));
+      if (disposed || phase === "error" || phase === "playing") return;
+      if (phase === "finished") await api.seek(0);
+      const voice = selectedVoice();
       if (!voice) { phase = "unavailable"; emit("This host has no local English voice. No paid speech request was made."); return; }
       const token = ++epoch; phase = "loading"; emit("Opening the saved section…");
       try { await saveTail; if (token !== epoch || disposed) return; phase = "playing"; lastSave = Date.now(); void step(token, voice); }
@@ -83,12 +94,48 @@ export function createDeviceLectureSpeech(options: Options) {
       epoch++; phase = "paused"; options.speech.cancel(); emit("Paused. Saving the last reported word or sentence boundary…");
       await persist(); if (phase === "paused") emit("Paused. Position saved.");
     },
-    async seek(chunkIndex: number) {
+    async seek(chunkIndex: number, characterOffset = 0, autoplay = false) {
       if (disposed || phase === "error" || !Number.isInteger(chunkIndex) || chunkIndex < 0 || chunkIndex >= options.chunkCount) return;
-      epoch++; phase = "paused"; options.speech.cancel(); index = chunkIndex; offset = 0;
-      emit("Saving the selected section…"); await persist(); emit("Section selected. Press Play.");
+      const token = ++epoch; phase = "loading"; options.speech.cancel(); emit("Finding your place…");
+      try {
+        const text = await load(chunkIndex);
+        if (token !== epoch || disposed) return;
+        index = chunkIndex; offset = Math.max(0, Math.min(text.length, Math.floor(characterOffset) || 0));
+        await persist();
+        if (token !== epoch || disposed || phase === "error") return;
+        phase = "paused"; emit("Ready."); if (autoplay) await api.play();
+      } catch (error) { if (token === epoch) fail(error); }
     },
-    setRate(value: number) { if (Number.isFinite(value) && value >= 0.5 && value <= 2) rate = value; },
+    // Web Speech exposes text boundaries, not a seekable recording. Ten words
+    // approximate five seconds at the same 120 wpm used by lecture estimates.
+    async skip(seconds: number) {
+      if (disposed || phase === "error" || !Number.isFinite(seconds) || !seconds) return;
+      const resume = phase === "playing", token = ++epoch;
+      phase = "loading"; options.speech.cancel(); emit("Finding your place…");
+      try {
+        let nextIndex = index, text = await load(nextIndex);
+        let words = [...text.matchAll(/\S+/g)];
+        let current = words.findIndex(word => word.index! >= offset);
+        if (current < 0) current = words.length;
+        let target = current + Math.round(Math.max(-60, Math.min(60, seconds)) * 2);
+        while (target < 0 && nextIndex > 0) {
+          text = await load(--nextIndex); words = [...text.matchAll(/\S+/g)]; target += words.length;
+        }
+        while (target >= words.length && nextIndex < options.chunkCount - 1) {
+          target -= words.length; text = await load(++nextIndex); words = [...text.matchAll(/\S+/g)];
+        }
+        if (token !== epoch || disposed) return;
+        index = nextIndex; offset = target >= words.length ? text.length : words[Math.max(0, target)]?.index ?? 0;
+        await persist();
+        if (token !== epoch || disposed || phase === "error") return;
+        phase = "paused"; emit("Moved about " + Math.abs(seconds) + " seconds " + (seconds < 0 ? "back." : "forward."));
+        if (resume) await api.play();
+      } catch (error) { if (token === epoch) fail(error); }
+    },
+    setRate(value: number) { if (Number.isFinite(value) && value >= 0.5 && value <= 2 && rate !== value) { rate = value; restart(); } },
+    setVoice(value: string) { if (voices().some(v => v.voiceURI === value)) { voiceURI = value; restart(); } },
+    voices,
     dispose() { disposed = true; epoch++; options.speech.cancel(); utterance = null; },
   };
+  return api;
 }
