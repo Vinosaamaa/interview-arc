@@ -23,7 +23,7 @@ capabilities: ["continuous-prepared-lectures"]
 amends: []
 supersedes: []
 learningRefs: []
-sources: [{"label":"Issue #473","url":"https://github.com/Vinosaamaa/interview-arc/issues/473","kind":"issue"},{"label":"OpenAI component bridge","url":"https://developers.openai.com/plugins/build/chatgpt-ui","kind":"documentation"}]
+sources: [{"label":"Issue #473","url":"https://github.com/Vinosaamaa/interview-arc/issues/473","kind":"issue"}]
 verification: {"state":"verified","evidenceRefs":["tests/lecture-player-recovery.test.mjs"]}
 visibility: public-safe
 publicationEligibility: eligible
@@ -37,7 +37,8 @@ run: null
 Listeners can send Continue from the embedded lecture card instead of typing it
 again. Edit message reveals a text field containing the complete outgoing text.
 The default is exactly Continue. Custom text is passed unchanged to the host's
-standard ui/message bridge, without a hidden teaching prompt or lesson context.
+standard [ui/message bridge](https://developers.openai.com/plugins/build/chatgpt-ui),
+without a hidden teaching prompt or lesson context.
 
 A click pauses active playback and sends once. Further clicks are ignored while
 the request is pending. Empty messages remain editable. A rejected request or
