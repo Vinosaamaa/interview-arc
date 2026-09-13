@@ -28,7 +28,7 @@ verification: {"state":"verified","evidenceRefs":["tests/lecture-device-speech.t
 visibility: public-safe
 publicationEligibility: eligible
 issue: 473
-pr: null
+pr: 480
 release: null
 run: null
 ---
