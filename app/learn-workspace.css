@@ -835,3 +835,9 @@
   .learn-animal-sketch svg > * { stroke-dashoffset: 0; }
   .learn-hero-pulse { opacity: .82; transform: scale(.76); }
 }
+.learn-course-prompt{margin:16px 0 22px;border:1px solid #c9d7d0;border-radius:10px;background:#f6f8f1;color:#173b35;overflow:hidden}
+.learn-course-prompt>summary{padding:16px;min-height:52px;cursor:pointer;font-weight:600;list-style:none;display:flex;gap:10px;align-items:center}
+.learn-course-prompt>div{padding:0 16px 16px}.learn-course-prompt label{display:block;font-size:14px;font-weight:600;margin-bottom:8px}
+.learn-course-prompt input{width:100%;min-width:0;min-height:44px;border:1px solid #b7c9bf;border-radius:7px;background:white;padding:10px;font:inherit;color:inherit}
+.learn-course-prompt p{font-size:14px;line-height:1.6;overflow-wrap:anywhere}.learn-course-prompt button{min-height:44px;padding:10px 12px;border:0;border-radius:7px;background:#215a50;color:white;font:inherit;cursor:pointer}
+.learn-course-prompt :is(input,button,summary):focus-visible{outline:3px solid #698b43;outline-offset:3px}.learn-course-prompt-text{margin-top:12px}.learn-course-prompt-text summary{font-size:13px;min-height:44px;display:flex;align-items:center;cursor:pointer}

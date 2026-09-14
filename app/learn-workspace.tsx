@@ -31,6 +31,7 @@ import {
 
 import HeroQuote from "./hero-quote";
 import WorkspaceHeroMetrics from "./workspace-hero-metrics";
+import LearnCoursePrompt from "./learn-course-prompt";
 
 import "./learn-workspace.css";
 
@@ -205,15 +206,16 @@ function EmptyLearn({ destination }: { destination: LearnDestination }) {
     <aside className="learn-context-rail learn-empty-index" aria-label={history ? "Completed Learning Sessions" : "Courses and Quick Studies"}>
       <header>
         <span className="learn-eyebrow">{history ? "COMPLETED SESSIONS" : "COURSES"}</span>
-        <h2>{history ? "0 records" : "0 Blueprints"}</h2>
+        <h2>{history ? "0 records" : "Your course catalog"}</h2>
         <p>{history ? "Finished Learning Sessions will appear here in chronological order." : "Saved Courses and Quick Studies will appear here."}</p>
       </header>
+      {!history && <LearnCoursePrompt />}
     </aside>
     <section className="learn-empty" aria-labelledby="learn-empty-title">
-      <span className="learn-eyebrow">LEARNING SPECIALIST REQUIRED</span>
-      <h2 id="learn-empty-title">{history ? "No completed Learning Sessions yet." : "Your first Course starts in the specialist."}</h2>
-      <p>The website is the durable Course and reading surface. Ask the Learning Specialist to propose a Blueprint or create a Quick Study; it will appear here after the exact owner-private revision is saved.</p>
-      <code>Initialize Interview Arc — Learning Specialist</code>
+      <span className="learn-eyebrow">LEARN WITH CHATGPT OR CODEX</span>
+      <h2 id="learn-empty-title">{history ? "Your learning history starts here." : "Start with a subject."}</h2>
+      <p>{history ? "Finished sessions keep your conversation, notes and next steps here." : "Ask your connected Learning Specialist to plan a course. Review the outline, then follow lessons, examples and homework at your own pace. Your course and progress will appear here."}</p>
+      {!history && <blockquote>“Help me learn Network Essentials. Plan a course in Interview Arc and show me the outline.”</blockquote>}
     </section>
   </div>;
 }
@@ -464,7 +466,8 @@ function CourseIndex({
   onSelectQuickStudy: (lessonId: string) => void;
 }) {
   return <nav className="learn-course-index" aria-label="Courses and Quick Studies">
-    <header><span className="learn-eyebrow">COURSES</span><h2>{courses.length} Blueprint{courses.length === 1 ? "" : "s"}</h2><p>Select a Course to change the reader.</p></header>
+    <header><span className="learn-eyebrow">YOUR COURSE CATALOG</span><h2>{courses.length} course{courses.length === 1 ? "" : "s"}</h2><p>Choose a subject. Follow its learning path.</p></header>
+    <LearnCoursePrompt />
     {courses.map((course) => <button type="button" key={course.course.courseId} className={selectedCourse?.course.courseId === course.course.courseId ? "active" : ""} aria-current={selectedCourse?.course.courseId === course.course.courseId ? "true" : undefined} onClick={() => onSelectCourse(course.course.courseId)}><span>{enrollmentCopy(course)}</span><strong>{course.course.title}</strong><small>{course.lessons.filter((lesson) => lesson.state === "completed").length} / {flattenCourseLessons(courseModulePath(payload, course)).length} lessons · Course {course.course.state}</small></button>)}
     {quickStudies.length > 0 && <div className="learn-course-index-divider"><span className="learn-eyebrow">QUICK STUDIES</span><small>{quickStudies.length} standalone</small></div>}
     {quickStudies.map((study) => <button type="button" key={study.lesson.lessonId} className={selectedQuickStudy?.lesson.lessonId === study.lesson.lessonId ? "active" : ""} aria-current={selectedQuickStudy?.lesson.lessonId === study.lesson.lessonId ? "true" : undefined} onClick={() => onSelectQuickStudy(study.lesson.lessonId)}><span>{study.lesson.state}</span><strong>{study.lesson.title}</strong><small>Current lesson r{study.current?.revision ?? study.lesson.currentRevision}</small></button>)}
@@ -507,7 +510,7 @@ function CourseOverview({ payload, course, onOpenLessons }: { payload: LearnPayl
     <p className="learn-overview-outcome">{course.blueprint?.intendedOutcome || "Intended outcome is not recorded yet."}</p>
     <dl className="learn-overview-facts">
       <div><dt>Course state</dt><dd>{statusLabel(course.course.state)}</dd></div>
-      <div><dt>Approved Blueprint</dt><dd>r{course.enrollment?.blueprintRevision ?? course.blueprint?.revision ?? course.course.currentBlueprintRevision}</dd></div>
+      <div><dt>{course.enrollment ? "Approved outline" : "Draft outline"}</dt><dd>r{course.enrollment?.blueprintRevision ?? course.blueprint?.revision ?? course.course.currentBlueprintRevision}</dd></div>
       <div><dt>Current module</dt><dd>{current?.module.title ?? "None"}</dd></div>
       <div><dt>Current lesson</dt><dd>{current?.lesson.title ?? "None"}</dd></div>
       <div><dt>Lessons written</dt><dd>{progress.writtenLessons} / {progress.totalLessons}</dd></div>

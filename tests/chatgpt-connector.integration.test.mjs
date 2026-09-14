@@ -1,4 +1,5 @@
 import { resourceHtml, resourcePdf, resourcePng } from "./fixtures/study-resource-content.mjs";
+import { verifyLearningChatgptFlow } from "./helpers/learning-chatgpt-flow.mjs";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -58,6 +59,7 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     assert.equal((await fetch(`${base}/mcp`, { headers: { "cf-access-jwt-assertion": assertion } })).status, 401);
     client = new Client({ name: "Synthetic connector", version: "1" });
     await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/chatgpt/mcp`), { requestInit: { headers: { "cf-access-jwt-assertion": assertion } } }));
+    await verifyLearningChatgptFlow(client);
     const importedArticle=await client.callTool({name:'import_learning_source_url',arguments:{operationId:'material-url-import',title:'Synthetic public article',url:'https://example.org/arc-synthetic-source'}});
     assert.ok(!importedArticle.isError,JSON.stringify(importedArticle));
     assert.equal(importedArticle.structuredContent.resource.filename,'source.html');
