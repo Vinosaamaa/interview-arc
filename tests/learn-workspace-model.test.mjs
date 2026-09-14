@@ -180,3 +180,14 @@ test("two Courses keep independent current Lessons and contents come from real s
   const snapshot = selectCurrentLesson(selectLearningCourse(payload)).current;
   assert.deepEqual(lessonContentItems(snapshot).map((item) => item.kind), ["section", "checkpoints"]);
 });
+
+
+test("Today selects the newest equal-state session without displacing a running or paused lesson", () => {
+  const planned = (id, time) => ({session:{sessionId:id,lessonId:id,state:"planned",updatedAt:time}});
+  const older=planned("older",1), newer=planned("newer",10), active={session:{...older.session,state:"running"}};
+  const sessions=[older,newer];
+  assert.equal(selectActiveLearningSession({...payload,sessions}).session.sessionId,"newer");
+  assert.equal(sessions[0],older);
+  assert.equal(selectActiveLearningSession({...payload,sessions:[older,newer,active]}).session.sessionId,"older");
+  assert.equal(selectActiveLearningSession({...payload,sessions:[newer,{session:{...older.session,state:"paused"}}]}).session.sessionId,"older");
+});

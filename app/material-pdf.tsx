@@ -4,6 +4,7 @@ import { openPdfPages } from "./resources/pdf-pages";
 export default function MaterialPdf({ url }: {
     url: string;
 }) {
+    const [attempt, setAttempt] = useState(0);
     const [pdf, setPdf] = useState<Awaited<ReturnType<typeof openPdfPages>> | null>(null), [page, setPage] = useState(1), [image, setImage] = useState<{
         page: number;
         url: string;
@@ -28,7 +29,7 @@ export default function MaterialPdf({ url }: {
         } })();
         return () => { abort.abort(); if (opened)
             void opened.close(); };
-    }, [url]);
+    }, [url, attempt]);
     useEffect(() => {
         if (!pdf)
             return;
@@ -39,5 +40,5 @@ export default function MaterialPdf({ url }: {
         return () => { active = false; if (objectUrl)
             URL.revokeObjectURL(objectUrl); };
     }, [pdf, page]);
-    return <section aria-label="Original PDF pages"><div className="material-source-actions"><button disabled={!pdf || page <= 1 || (image?.page !== page && !error)} onClick={() => { setError(""); setPage(p => p - 1); }}>Previous page</button><span>Page {page}{pdf ? ` of ${pdf.total}` : ""}</span><button disabled={!pdf || page >= pdf.total || (image?.page !== page && !error)} onClick={() => { setError(""); setPage(p => p + 1); }}>Next page</button></div>{error ? <p role="alert">{error} The unchanged PDF is available through Download original.</p> : image?.page === page ? <img className="material-image" src={image.url} alt={`Original PDF page ${page}`}/> : <p role="status">Rendering original PDF page…</p>}</section>;
+    return <section aria-label="Original PDF pages"><div className="material-source-actions"><button disabled={!pdf || page <= 1 || (image?.page !== page && !error)} onClick={() => { setError(""); setPage(p => p - 1); }}>Previous page</button><span>Page {page}{pdf ? ` of ${pdf.total}` : ""}</span><button disabled={!pdf || page >= pdf.total || (image?.page !== page && !error)} onClick={() => { setError(""); setPage(p => p + 1); }}>Next page</button></div>{error ? <div role="alert"><p>The PDF preview could not load. Your original is still available.</p><div className="material-source-actions"><button onClick={() => { setError(""); setImage(null); setPdf(null); setAttempt(n => n + 1); }}>Retry preview</button><button onClick={() => window.location.reload()}>Reload updated reader</button><a href={url} target="_blank" rel="noreferrer">Open original PDF</a></div></div> : image?.page === page ? <img className="material-image" src={image.url} alt={`Original PDF page ${page}`}/> : <p role="status">Rendering original PDF page…</p>}</section>;
 }

@@ -86,7 +86,9 @@ test("Learn uses the approved 316 plus 1200 two-panel frame", async () => {
 
   assert.match(styles, /\.active-workspace-learn \.page-content \{[^}]*max-width:\s*none[^}]*padding:\s*0 24px 80px/s);
   assert.match(styles, /\.learn-frame \{[^}]*max-width:\s*1536px[^}]*width:\s*100%/s);
-  assert.match(workspace, /className=\{`learn-frame learn-hero learn-hero-\$\{destination\}`\}/);
+  const hero = await readFile(new URL("../app/learn-page-hero.tsx", import.meta.url), "utf8");
+  assert.match(hero, /learn-frame learn-hero learn-hero-/);
+  assert.match(workspace, /<LearnPageHero/);
   assert.match(styles, /\.learn-courses-layout \{[^}]*grid-template-columns:\s*minmax\(290px, 316px\) minmax\(0, 1200px\)/s);
   assert.match(styles, /\.learn-today-body \{[^}]*grid-template-columns:\s*minmax\(290px, 316px\) minmax\(0, 1200px\)/s);
   assert.match(styles, /\.learn-empty-layout,[\s\S]*?\.learn-history \{[^}]*grid-template-columns:\s*minmax\(290px, 316px\) minmax\(0, 1200px\)/s);

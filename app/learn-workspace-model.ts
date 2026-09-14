@@ -1,4 +1,4 @@
-export type LearnDestination = "today" | "courses" | "history" | "analytics" | "materials";
+export type LearnDestination = "today" | "courses" | "history" | "analytics" | "materials" | "library";
 export type LearningSessionState = "planned" | "running" | "paused" | "completed";
 export type LearningCheckpointStatus = "not_attempted" | "needs_another_pass" | "demonstrated";
 
@@ -104,6 +104,7 @@ export type LearningQuickStudyProjection = {
 };
 
 export type LearningSessionProjection = {
+  lesson?: LearningLessonSnapshot | null;
   session: {
     sessionId: string;
     scopeType: "course" | "quick_study";
@@ -268,7 +269,7 @@ export function selectCurrentLesson(course: LearningCourseProjection) {
 export function selectActiveLearningSession(payload: LearnPayload, lessonId?: string) {
   const candidates = payload.sessions.filter((projection) => (
     projection.session.state !== "completed" && (!lessonId || projection.session.lessonId === lessonId)
-  ));
+  )).sort((left, right) => right.session.updatedAt - left.session.updatedAt);
   return candidates.find((projection) => projection.session.state === "running")
     ?? candidates.find((projection) => projection.session.state === "paused")
     ?? candidates.find((projection) => projection.session.state === "planned")
@@ -279,7 +280,7 @@ export function selectStartedLearningSession(payload: LearnPayload, lessonId?: s
   const candidates = payload.sessions.filter((projection) => (
     (projection.session.state === "running" || projection.session.state === "paused")
     && (!lessonId || projection.session.lessonId === lessonId)
-  ));
+  )).sort((left, right) => right.session.updatedAt - left.session.updatedAt);
   return candidates.find((projection) => projection.session.state === "running")
     ?? candidates.find((projection) => projection.session.state === "paused")
     ?? null;

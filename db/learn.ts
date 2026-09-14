@@ -1819,13 +1819,18 @@ export async function queryLearningAnalytics(ownerId: string, inputValue: unknow
 export async function queryLearningSessions(ownerId: string, inputValue: unknown = {}) {
   const input = queryLearningSessionsSchema.parse(inputValue);
   const db = getDb();
-  const rows = await db.select().from(learningSessions).where(and(
+  const rows = await db.select({ session: learningSessions, lesson: learningLessonRevisions }).from(learningSessions)
+    .leftJoin(learningLessonRevisions, and(
+      eq(learningLessonRevisions.ownerId, learningSessions.ownerId),
+      eq(learningLessonRevisions.lessonId, learningSessions.lessonId),
+      eq(learningLessonRevisions.revision, learningSessions.lessonRevision),
+    )).where(and(
     eq(learningSessions.ownerId, ownerId),
     input.sessionId ? eq(learningSessions.sessionId, input.sessionId) : undefined,
     input.lessonId ? eq(learningSessions.lessonId, input.lessonId) : undefined,
     input.includeCompleted ? undefined : ne(learningSessions.state, "completed"),
   )).orderBy(desc(learningSessions.updatedAt)).limit(100);
-  const sessions = await Promise.all(rows.map(async (session) => {
+  const sessions = await Promise.all(rows.map(async ({ session, lesson }) => {
     const [intervals, turns] = await Promise.all([
       db.select().from(learningSessionIntervals).where(and(
         eq(learningSessionIntervals.ownerId, ownerId),
@@ -1838,6 +1843,7 @@ export async function queryLearningSessions(ownerId: string, inputValue: unknown
     ]);
     return {
       session: withoutOwnerId(session),
+      lesson: lesson ? displayLesson(lesson) : null,
       intervals: intervals.map(withoutOwnerId),
       turns: turns.map(withoutOwnerId),
       evidencePolicy: "transcript_only" as const,
