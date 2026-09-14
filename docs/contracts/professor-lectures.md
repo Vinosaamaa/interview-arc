@@ -105,13 +105,15 @@ Physical mobile background and lock-screen behavior require device acceptance.
 
 ## ChatGPT boundary
 
-The in-chat card has a Continue button. Its default message is exactly
-`Continue`; Edit message changes the complete outgoing text, with no appended
-instructions or lesson metadata. A deliberate click sends one `ui/message`
-request. Pending clicks are suppressed, and failures never trigger an automatic
-retry. The editor retains the draft in host widget state when available without
-changing the saved lecture. This sends a chat follow-up; it cannot detect a
-native Live turn ending, open a native permission prompt, or force spoken output.
+Chat message shortcuts live in the separate **Live Chat Controls** widget,
+opened with `open_live_chat_controls`. They are not part of the lecture player.
+The owner can add buttons with individual labels and exact messages, edit,
+delete and undo deletion. The initial button sends exactly `Continue`. Settings
+remain in that widget's host state when supported. Only a deliberate button
+click sends `ui/message`; opening, editing and saving never send. Pending clicks
+are suppressed and failures never retry automatically. No lecture or speech
+configuration is required. The widget cannot detect native Live turn endings,
+open native permission prompts, or force spoken output.
 
 Position conflicts stop playback without overwriting newer progress. The player
 shows a visible Reload saved position action. Recovery drains dispatched saves,
