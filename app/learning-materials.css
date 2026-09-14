@@ -43,3 +43,5 @@
 .material-fullscreen > header { position:sticky; top:0; z-index:2; background:var(--learn-paper,#fbfcfa); }
 
 .material-reader .material-contents { position:relative; top:auto; right:auto; display:block; }
+
+.material-contents > summary { min-height:44px; }

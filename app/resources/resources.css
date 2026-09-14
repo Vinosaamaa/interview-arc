@@ -271,7 +271,7 @@
 .resource-upload { background:#e9effc; border-radius:14px; }
 @media(max-width:800px) { .resources-page .resource-columns { grid-template-columns:1fr; } .resources-page { padding:25px 16px 80px; } .resource-columns > article { padding:26px 22px; } }
 
-.active-workspace-learn .resources-page { max-width:none; margin:0; padding:0; }
+.active-workspace-learn .resources-page { max-width:none; margin:0; padding:25px 0 40px; }
 
 .resource-mobile-panes { display:none; }
 @media(max-width:800px) { .resource-mobile-panes { display:flex; gap:8px; } .resource-mobile-panes button[aria-pressed=true] { background:#e9effc; color:#254b7e; } .resource-columns.mobile-index > article,.resource-columns.mobile-reader > aside { display:none; } }
