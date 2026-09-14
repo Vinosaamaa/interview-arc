@@ -60,6 +60,12 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     client = new Client({ name: "Synthetic connector", version: "1" });
     await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/chatgpt/mcp`), { requestInit: { headers: { "cf-access-jwt-assertion": assertion } } }));
     await verifyLearningChatgptFlow(client);
+    const importedArticle=await client.callTool({name:'import_learning_source_url',arguments:{operationId:'material-url-import',title:'Synthetic public article',url:'https://example.org/arc-synthetic-source'}});
+    assert.ok(!importedArticle.isError,JSON.stringify(importedArticle));
+    assert.equal(importedArticle.structuredContent.resource.filename,'source.html');
+    const redirectedArticle=await client.callTool({name:'import_learning_source_url',arguments:{operationId:'material-redirect-rejected',title:'Redirect must not be followed',url:'https://example.org/arc-synthetic-redirect'}});
+    assert.equal(redirectedArticle.isError,true);
+    assert.match(redirectedArticle.content[0].text,/could not be read publicly/);
     const materialSource=await client.callTool({name:'save_learning_source_text',arguments:{operationId:'material-source',title:'Synthetic learning transcript',text:'00:00 Exact original source. Stable identities prevent duplicate writes.\n01:20 Changed payloads need a new identity.'}});
     assert.ok(!materialSource.isError,JSON.stringify(materialSource));
     const originalMaterial=materialSource.structuredContent.resource;
