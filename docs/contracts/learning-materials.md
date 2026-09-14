@@ -12,7 +12,7 @@ response may still contain an excerpt or login screen; the assistant must read
 it and identify coverage. Subscription content arrives through owner-uploaded
 original files in the existing library.
 
-YouTube descriptions are not transcripts. Use captions actually retrieved by
+YouTube watch URLs first attempt publicly available player captions and save the full WebVTT file with timestamps. Empty, blocked or unavailable caption responses fail without saving a description. YouTube descriptions are not transcripts. Use captions actually retrieved by
 available browsing/transcript tools, or a supplied transcript export. Save
 unchanged text with timestamps through `save_learning_source_text`, or use file
 upload for the original TXT/VTT/SRT/HTML/PDF/image. Never reconstruct unavailable
@@ -39,8 +39,7 @@ reading fragments with the pinned SHA and never replaces earlier fragments.
 Search explicitly covers loaded source parts. Original HTML runs in an opaque
 sandbox with scripts, forms, network subresources and top navigation disabled;
 inline styling and embedded images remain. External assets absent from a saved
-page stay unavailable. Original downloads remain byte-identical. PDF/image
-support depends on the browser's viewer; the download remains available.
+page stay unavailable. Original downloads remain byte-identical. PDF pages render through the existing local browser PDF renderer, one page at a time with bounded canvas memory; images display directly. The download remains available.
 
 Acceptance includes exact-byte retrieval, source identity failures, owner
 isolation, changed retry conflicts, tool-to-website publication, safe original

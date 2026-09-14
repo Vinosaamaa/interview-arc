@@ -52,5 +52,13 @@ test('public URL intake preserves article bytes and refuses credentials, private
  const imported=await importLearningSource(f.db,f.bucket,'a',{operationId:'article-url',title:'Article',url:'https://example.com/article'},async(url,options)=>{assert.equal(options.redirect,'error');assert.equal(options.headers.Cookie,undefined);return new Response(html,{headers:{'content-type':'text/html'}});});
  assert.equal(new TextDecoder().decode(await (await readStudyOriginal(f.db,f.bucket,'a',imported.resource.resourceId)).object.arrayBuffer()),html);
  for(const url of ['https://127.0.0.1','https://user:pass@example.com','http://example.com','https://localhost','https://[::1]'])assert.throws(()=>publicSourceUrl(url));
- await assert.rejects(importLearningSource(f.db,f.bucket,'a',{operationId:'youtube',title:'Video',url:'https://www.youtube.com/watch?v=synthetic01'}),/actual captions/);
+ await assert.rejects(importLearningSource(f.db,f.bucket,'a',{operationId:'youtube',title:'Video',url:'https://www.youtube.com/watch?v=synthetic01'},async()=>new Response('<p>Description only.</p>')),/actual captions/);
+});
+test('public video captions preserve complete WebVTT and unavailable or redirected tracks fail closed',async t=>{
+ const f=fixture(t),vtt='WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nExact first words.\n\n00:59:59.000 --> 01:00:00.000\nExact final words.\n';
+ const track={baseUrl:'https://www.youtube.com/api/timedtext?v=synthetic01&sig=synthetic',languageCode:'en',kind:'asr'};
+ const v={operationId:'video-captions',title:'Video',url:'https://youtu.be/synthetic01'};
+ const saved=await importLearningSource(f.db,f.bucket,'a',v,async(url,opts)=>{assert.equal(opts.redirect,'error');return String(url).includes('/watch?')?new Response(JSON.stringify({captionTracks:[track]})):new Response(vtt);});
+ assert.equal(saved.automatic,true);assert.equal(saved.resource.filename,'youtube-captions.vtt');assert.equal((await getStudyResource(f.db,'a',saved.resource.resourceId)).fragment.text,vtt);
+ await assert.rejects(importLearningSource(f.db,f.bucket,'a',{...v,operationId:'bad-caption'},async()=>new Response(JSON.stringify({captionTracks:[{...track,baseUrl:'https://private.example/secret'}]}))),/not publicly retrievable/);
 });

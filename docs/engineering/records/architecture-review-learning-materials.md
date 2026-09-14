@@ -10,7 +10,7 @@ capabilityIds: ["learning-workspace"]
 createdAt: 2026-09-13
 reconstructed: false
 confidence: verified
-unknowns: ["Caption availability for arbitrary YouTube videos", "Browser-specific original PDF rendering"]
+unknowns: ["Caption availability for arbitrary YouTube videos", "Caption accuracy and visual content absent from text"]
 modules: ["learning-workspace"]
 interfaces: ["chatgpt-practice-mcp"]
 seams: ["source-to-private-learning-material"]
@@ -61,7 +61,7 @@ between source and interpretation. Reusing practice publication would introduce
 irrelevant outcomes and lifecycle states. Generating summaries or audio on the
 server would add an unnecessary provider and cost dependency.
 
-Arbitrary YouTube captions are not guaranteed. The official captions-download
+Public player-caption retrieval is attempted without authentication, then saved as unchanged WebVTT. Arbitrary YouTube captions are not guaranteed. The official captions-download
 API requires permission to edit the video, so it cannot implement universal
 third-party video retrieval. Available transcript tools or a supplied export
 provide source text. Missing or partial content remains explicit; a video

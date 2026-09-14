@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LearningMaterial } from "../db/learning-materials";
 import type { StudyResource } from "../db/study-resources";
+import MaterialPdf from "./material-pdf";
 import "./learning-materials.css";
 
 type Item=Omit<LearningMaterial,"summary">;
@@ -52,7 +53,8 @@ function MaterialReader({material:m}:{material:LearningMaterial}){
     {source?.resource.warnings.map((w,i)=><p className="material-muted" key={i}>{w}</p>)}
     {isHtml&&<p className="material-muted">Saved page shown safely: scripts and external assets are disabled. Embedded images and styling remain available.</p>}
     {isImage&&<img className="material-image" src={preview} alt={source!.resource.title}/>}
-    {(isHtml||isPdf)&&<iframe className="material-preview" title="Original artifact" src={preview} sandbox={isPdf?"allow-same-origin":""}/>}
+    {isHtml&&<iframe className="material-preview" title="Original artifact" src={preview} sandbox=""/>}
+    {isPdf&&<MaterialPdf url={preview}/>}
     {source?.resource.chunkCount===0&&<p>This file has no readable text copy. Use its original preview or download.</p>}
     {source&&source.resource.chunkCount>0&&<><label htmlFor="transcript-filter">Find in loaded source</label><input id="transcript-filter" value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Word or phrase"/><p className="material-muted">{fragments.length} of {source.resource.chunkCount} source parts loaded{source.nextChunk===null?" · Complete reading copy":""}</p>
     <div className="material-transcript">{fragments.filter(f=>!filter||f.text.toLowerCase().includes(filter.toLowerCase())).map(f=><section key={f.ordinal}><h4>{f.location} · part {f.ordinal+1}</h4><pre>{f.text}</pre></section>)}</div>
