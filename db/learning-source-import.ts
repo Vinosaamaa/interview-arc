@@ -16,7 +16,7 @@ export async function importLearningSource(db: ResourceDatabase, bucket: Resourc
     const url = publicSourceUrl(input.url);
     if (/(^|\.)youtube\.com$|^youtu\.be$/.test(url.hostname))
         return importYouTube(db, bucket, owner, input, url, fetcher);
-    const response = await fetcher(url, { redirect: "error", signal: AbortSignal.timeout(30000), headers: { Accept: "text/html,text/plain,application/pdf" } });
+    const response = await fetcher(url, { redirect: "manual", signal: AbortSignal.timeout(30000), headers: { Accept: "text/html,text/plain,application/pdf" } });
     if (!response.ok || !response.body)
         throw new ResourceError("The source could not be read publicly. Upload the saved HTML/PDF or use the final public URL. No subscription access was attempted.");
     const type = (response.headers.get("content-type") ?? "").split(";")[0].toLowerCase();
@@ -76,7 +76,7 @@ async function importYouTube(db: ResourceDatabase, bucket: ResourceBucket, owner
         throw new ResourceError("Supply a YouTube watch URL for one video.");
     const sourceUrl = `https://www.youtube.com/watch?v=${id}`;
     const unavailable = () => new ResourceError("The video's actual captions are not publicly retrievable here. Use an available transcript/browser tool and save_learning_source_text, or upload a TXT/VTT/SRT transcript export. The video description was not saved as a transcript.");
-    const response = await fetcher(sourceUrl, { redirect: "error", signal: AbortSignal.timeout(30000) });
+    const response = await fetcher(sourceUrl, { redirect: "manual", signal: AbortSignal.timeout(30000) });
     if (!response.ok || !response.body)
         throw unavailable();
     const page = await new Response(boundedResourceStream(response.body, 4 * 1024 * 1024).stream).text(), tracks = captionTracks(page);
@@ -87,7 +87,7 @@ async function importYouTube(db: ResourceDatabase, bucket: ResourceBucket, owner
     if (captions.protocol !== "https:" || captions.username || captions.password || captions.port || !["www.youtube.com", "youtube.com"].includes(captions.hostname) || captions.pathname !== "/api/timedtext")
         throw unavailable();
     captions.searchParams.set("fmt", "vtt");
-    const r = await fetcher(captions, { redirect: "error", signal: AbortSignal.timeout(30000) });
+    const r = await fetcher(captions, { redirect: "manual", signal: AbortSignal.timeout(30000) });
     if (!r.ok || !r.body)
         throw unavailable();
     const bytes = new Uint8Array(await new Response(boundedResourceStream(r.body, 2000000).stream).arrayBuffer());
