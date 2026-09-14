@@ -12,8 +12,8 @@ export const liveChatControlsHtml = String.raw`<!doctype html>
 </main><script>
 const $=id=>document.getElementById(id),pending=new Map();
 let nextId=1,buttons=[{id:'continue',label:'Continue',message:'Continue'}],editing=false,editingId=null,sending=false,touched=false,deleted=null;
-function restore(){if(touched)return;const saved=window.openai?.widgetState?.liveChatButtons;if(Array.isArray(saved)&&saved.every(b=>b&&typeof b.id==='string'&&typeof b.label==='string'&&b.label.trim()&&b.label.length<=80&&typeof b.message==='string'&&b.message.trim()&&b.message.length<=4000)&&new Set(saved.map(b=>b.id)).size===saved.length)buttons=saved.map(b=>({id:b.id,label:b.label,message:b.message}));}
-function persist(){touched=true;try{window.openai?.setWidgetState?.({...window.openai.widgetState,liveChatButtons:buttons});}catch{$('status').textContent='Saved for this visit. This chat could not remember the changes.';}}
+function restore(state=window.openai?.widgetState){if(touched)return;const saved=state?.liveChatButtons;if(Array.isArray(saved)&&saved.every(b=>b&&typeof b.id==='string'&&typeof b.label==='string'&&b.label.trim()&&b.label.length<=80&&typeof b.message==='string'&&b.message.trim()&&b.message.length<=4000)&&new Set(saved.map(b=>b.id)).size===saved.length)buttons=saved.map(b=>({id:b.id,label:b.label,message:b.message}));}
+function persist(){touched=true;const failed=()=>{$('status').textContent='Saved for this visit. This chat could not remember the changes.';};try{if(!window.openai?.setWidgetState){failed();return;}Promise.resolve(window.openai.setWidgetState({...window.openai.widgetState,liveChatButtons:buttons})).catch(failed);}catch{failed();}}
 function render(){
  $('buttons').replaceChildren();
  for(const item of buttons){const b=document.createElement('button');b.type='button';b.className='shortcut';b.textContent=item.label;b.disabled=sending;b.setAttribute('aria-label',editing?'Edit '+item.label:item.label);b.onclick=()=>editing?openEditor(item):send(item);$('buttons').appendChild(b);}
@@ -31,6 +31,7 @@ function notify(method,params){window.parent.postMessage({jsonrpc:'2.0',method,p
 function request(method,params){const id=nextId++;return new Promise((resolve,reject)=>{const timeout=setTimeout(()=>{pending.delete(id);reject(Error('Timed out'));},15000);pending.set(id,{resolve,reject,timeout});window.parent.postMessage({jsonrpc:'2.0',id,method,params},'*');});}
 async function send(item){if(sending||editing)return;sending=true;render();$('status').textContent='Sending…';try{const result=await request('ui/message',{role:'user',content:[{type:'text',text:item.message}]});if(result?.isError)throw Error('Rejected');$('status').textContent='Sent to ChatGPT.';}catch{$('status').textContent='Could not confirm sending. Check the chat before retrying, or copy the message from Edit.';}finally{sending=false;render();}}
 window.addEventListener('message',event=>{if(event.source!==window.parent)return;const m=event.data;if(m?.jsonrpc!=='2.0')return;const p=pending.get(m.id);if(p){pending.delete(m.id);clearTimeout(p.timeout);if(m.error)p.reject(Error(m.error.message));else p.resolve(m.result);}});
+window.addEventListener('openai:set_globals',event=>{restore(event.detail?.globals?.widgetState);render();});
 new ResizeObserver(()=>notify('ui/notifications/size-changed',{height:document.querySelector('main').getBoundingClientRect().height})).observe(document.querySelector('main'));
 restore();render();request('ui/initialize',{protocolVersion:'2026-01-26',appInfo:{name:'Live Chat Controls',version:'1.0.0'},appCapabilities:{}}).then(()=>{notify('ui/notifications/initialized',{});restore();render();}).catch(()=>{$('status').textContent='Open this widget inside ChatGPT to send messages.';});
 </script></body></html>`;

@@ -12,8 +12,13 @@ function fixture(initial,hold=false){
  window.parent={postMessage(m){if(!m.id)return;queueMicrotask(()=>{if(m.method==='ui/initialize'){deliver({jsonrpc:'2.0',id:m.id,result:{}});return;}assert.equal(m.method,'ui/message');messages.push(JSON.parse(JSON.stringify(m.params)));reply=(result={},error)=>deliver({jsonrpc:'2.0',id:m.id,result,error});if(!hold)reply();});}};
  const document={getElementById:get,createElement:()=>new Element(),querySelector:get,addEventListener(){}};
  runInNewContext(liveChatControlsHtml.match(/<script>([\s\S]*)<\/script>/)[1],{window,document,crypto,ResizeObserver:class{observe(){}},setTimeout,clearTimeout,Error});
- return {get,messages,state:()=>state,reply:(...args)=>reply(...args),submit(label,message){get('label').value=label;get('message').value=message;get('save').onclick();}};
+ return {get,messages,state:()=>state,globals(value){const event=new Event('openai:set_globals');event.detail={globals:{widgetState:value}};window.openai.widgetState=value;window.dispatchEvent(event);},reply:(...args)=>reply(...args),submit(label,message){get('label').value=label;get('message').value=message;get('save').onclick();}};
 }
+test('late host state restores saved buttons without overwriting active edits',async()=>{
+ const f=fixture();await tick();const saved={liveChatButtons:[{id:'saved',label:'Saved',message:'Saved message'}]};f.globals(saved);
+ assert.equal(f.get('buttons').children[0].textContent,'Saved');f.get('add').onclick();f.submit('New','New message');
+ f.globals(saved);assert.equal(f.get('buttons').children.length,2);
+});
 test('standalone controls send only the selected message and suppress pending clicks',async()=>{
  const f=fixture(undefined,true);await tick();assert.equal(f.get('buttons').children.length,1);assert.equal(f.messages.length,0);
  const send=f.get('buttons').children[0].onclick();await tick();await f.get('buttons').children[0].onclick();assert.equal(f.messages.length,1);
