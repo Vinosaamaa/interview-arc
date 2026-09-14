@@ -24,6 +24,6 @@ export async function GET(request: Request) {
         return new Response(bytes ?? object.body, { headers: { ...headers, "Content-Type": image ?? (pdf ? "application/pdf" : html ? "text/html; charset=utf-8" : "text/plain; charset=utf-8"), "Content-Disposition": "inline" } });
     }
     catch (e) {
-        return Response.json({ error: e instanceof ResourceError ? e.message : "Original preview is unavailable." }, { status: e instanceof ResourceError ? e.status : 400, headers });
+        return Response.json({ error: e instanceof ResourceError ? e.message : "Original preview is unavailable. Please retry." }, { status: e instanceof ResourceError ? e.status : 503, headers });
     }
 }

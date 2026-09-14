@@ -23,6 +23,7 @@ function currentMaterial() { return typeof window === "undefined" ? "" : new URL
 export default function LearningMaterials() {
     const [items, setItems] = useState<Item[]>([]), [query, setQuery] = useState(""), [next, setNext] = useState<number | null>(null), [selected, setSelected] = useState(currentMaterial), [material, setMaterial] = useState<LearningMaterial | null>(null), [error, setError] = useState(""), [loading, setLoading] = useState(false);
     const generation = useRef(0), loadGeneration = useRef(0);
+    const [listError, setListError] = useState("");
     const load = useCallback(async (offset = 0, q = "") => { const job = ++loadGeneration.current; setLoading(true); try {
         const value = await read<{
             materials: Item[];
@@ -32,11 +33,11 @@ export default function LearningMaterials() {
             return;
         setItems(old => offset ? [...old, ...value.materials] : value.materials);
         setNext(value.nextOffset);
-        setError("");
+        setListError("");
     }
     catch (e) {
         if (job === loadGeneration.current)
-            setError(message(e));
+            setListError(message(e));
     }
     finally {
         if (job === loadGeneration.current)
@@ -60,6 +61,7 @@ export default function LearningMaterials() {
    <aside className="material-index" aria-label="Published materials"><form onSubmit={e => { e.preventDefault(); void load(0, query); }}><label htmlFor="material-search">Find a material</label><div className="material-search"><input id="material-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Title or idea"/><button disabled={loading}>Search</button></div></form>
     <ul>{items.map(i => <li key={i.materialId}><button className={i.materialId === selected ? "selected" : ""} aria-pressed={i.materialId === selected} onClick={() => select(i.materialId)}><span className="material-kind">{i.kind === "youtube" ? "YouTube" : i.kind === "article" ? "Article" : "Uploaded source"}</span><strong>{i.title}</strong><small>{new Date(i.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Los_Angeles" })} · {i.coverage === "complete" ? "Full source reviewed" : "Partial coverage"}</small></button></li>)}</ul>
     {!items.length && !loading && <p className="material-muted">No published materials yet.</p>}{next !== null && <button disabled={loading} onClick={() => void load(next, query)}>Load more</button>}<button className="material-refresh" disabled={loading} onClick={() => void load(0, query)}>Refresh materials</button>
+    {listError && <p role="alert">{listError}</p>}
    </aside>
    <article className="material-reader" aria-label="Learning material reader">
     {selected && <button className="material-back" onClick={() => select("")}>← All materials</button>}

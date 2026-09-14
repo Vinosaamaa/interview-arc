@@ -4893,7 +4893,8 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     const route = new URL(workspaceViewHref(window.location.href, "learn"), window.location.origin);
     route.searchParams.delete("workspace");
     route.searchParams.delete("engineering");
-    route.searchParams.set("learn", nextDestination);
+      route.searchParams.set("learn", nextDestination);
+      if (nextDestination !== "materials") route.searchParams.delete("material");
     if (nextDestination === "courses" && focus) {
       if (focus.courseId) route.searchParams.set("course", focus.courseId);
       else route.searchParams.delete("course");
