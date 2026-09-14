@@ -5,6 +5,7 @@ import { registerChatgptTools } from "./chatgpt-tools";
 import { registerLearningMaterialTools } from "./learning-material-tools.ts";
 import { registerStudyResourceTools } from "./study-resource-tools";
 import { registerLecturePlayerTools, routeLectureMedia } from "./lecture-player-tools";
+import { registerLiveChatControls } from "./live-chat-controls";
 import { listLectures, readLecture, saveLecture, saveLectureCursor } from "../db/lectures";
 import { LectureError, lectureId, saveLectureSchema, lectureCursorSchema } from "../db/lecture-policy";
 import { registerEditorialTools } from "./editorial-tools";
@@ -2641,6 +2642,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
   registerStudyResourceTools(server, env.DB, env.AUDIO, ownerId);
   registerLearningMaterialTools(server, env.DB, env.AUDIO, ownerId);
   registerLecturePlayerTools(server, env.DB, env.AUDIO, ownerId, env.OPENAI_API_KEY);
+  registerLiveChatControls(server);
   registerDrawingTools(server, env.DB, env.AUDIO, ownerId);
 
   const lectureResult = async (work: () => Promise<object>) => {
