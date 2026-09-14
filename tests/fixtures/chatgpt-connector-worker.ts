@@ -35,7 +35,12 @@ function prepareSigningKey(db: D1Database) {
 }
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
+  // Validate options in the actual Workers runtime before mocked network replies.
+  // In particular, Workers rejects redirect:error although Node accepts it.
+  new Request(input, init);
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  if (url === "https://example.org/arc-synthetic-source") return new Response("<h1>Exact original article</h1><p>The final source passage survives import.</p>", {headers:{"Content-Type":"text/html"}});
+  if (url === "https://example.org/arc-synthetic-redirect") return new Response(null, {status:302,headers:{Location:"https://localhost/private"}});
   if (url === "https://files.oaiusercontent.com/synthetic-library.txt") return new Response("Exact ChatGPT attachment content.\n", { headers: { "Content-Type": "text/plain" } });
   if (url === `${issuer}/cdn-cgi/access/certs`) return Response.json({ keys: [{ ...publicKey, kid: "synthetic" }] });
   return originalFetch(input, init);
