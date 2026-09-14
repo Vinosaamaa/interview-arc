@@ -760,7 +760,7 @@ export default function LearnWorkspace({
     const initialLoad = window.setTimeout(() => void refresh(), 0);
     const wake = () => { if (document.visibilityState === "visible") void refresh(); };
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const reconcile = async () => { if (await refresh() === false) throw new Error("Learn refresh failed"); };
+    const reconcile = async () => { if (await refresh() !== true) throw new Error("Learn refresh failed"); };
     const unsubscribe = subscribeToLiveUpdates({
       url: `${protocol}//${window.location.host}/api/live-events`,
       onUpdate: (update) => update.scope === "learning" ? reconcile() : undefined,

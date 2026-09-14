@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { after } from "next/server";
 import { publishOwnerLiveUpdate } from "../../../worker/live-update-hub";
 import {
   LearningError,
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
         { status: 400, headers: { "cache-control": "private, no-store" } },
       );
     }
-    await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "learning");
+    after(async () => { await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "learning"); });
     return Response.json(result, { headers: { "cache-control": "private, no-store" } });
   } catch (error) {
     return mutationFailure(error);

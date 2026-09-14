@@ -96,7 +96,7 @@ function MaterialReader({ material: m }: {
     const term = useDeferredValue(filter.toLowerCase());
     const matching = useMemo(() => normalized.filter(f => !term || f.searchText.includes(term)), [normalized, term]);
     useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-    async function loadSource(all = false) { if (busyRef.current)
+    async function loadSource(all = false) { if (source?.nextChunk === null || busyRef.current)
         return; busyRef.current = true; setBusy(true); setError(""); try {
         if (all) {
             const value = await read<{

@@ -762,6 +762,9 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     assert.equal(corrected.checkpointResults[0].revision, 2);
     assert.equal(corrected.lessonCompletion.completed, true);
     assert.equal(corrected.lessonCompletion.lessonRevision, 2);
+    const pinnedOriginal = await call(client, "query_learning_sessions", { sessionId: createSessionInput.sessionId, includeCompleted: true });
+    assert.equal(pinnedOriginal.sessions[0].lesson.revision, 1, "a newer lesson revision must not replace the original session reading");
+    assert.equal(pinnedOriginal.sessions[0].lesson.title, lesson.title);
     assert.equal(corrected.lessonCompletion.courseCompleted, false);
     assert.equal(corrected.lessonCompletion.nextLessonId, completionLesson.lessonId);
     const correctedEvidence = await call(client, "query_learning_evidence", { lessonId: lesson.lessonId });
