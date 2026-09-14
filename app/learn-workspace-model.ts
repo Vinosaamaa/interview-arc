@@ -1,4 +1,4 @@
-export type LearnDestination = "today" | "courses" | "history" | "analytics";
+export type LearnDestination = "today" | "courses" | "history" | "analytics" | "materials";
 export type LearningSessionState = "planned" | "running" | "paused" | "completed";
 export type LearningCheckpointStatus = "not_attempted" | "needs_another_pass" | "demonstrated";
 

@@ -21,7 +21,7 @@ import {
   type CoursePathLesson,
   type CoursePathLessonState,
   type CourseSection,
-  type LearnDestination,
+  type LearnDestination as AllLearnDestination,
   type LearnPayload,
   type LearningCourseProjection,
   type LearningLessonSnapshot,
@@ -34,6 +34,7 @@ import WorkspaceHeroMetrics from "./workspace-hero-metrics";
 
 import "./learn-workspace.css";
 
+type LearnDestination = Exclude<AllLearnDestination, "materials">;
 type MobileCoursePane = "path" | "lesson";
 type MobileTodayPane = "thread" | "session";
 type CourseFocus = { courseId: string; lessonId: string; section: CourseSection };

@@ -128,6 +128,7 @@ import MobileRowActions from "./mobile-row-actions";
 import TodayActivityRow from "./today-activity-row";
 import LearnWorkspace from "./learn-workspace";
 import type { LearnCourseFocus } from "./learn-workspace";
+import LearningMaterials from "./learning-materials";
 import type { LearnDestination } from "./learn-workspace-model";
 import EngineeringWorkspace, {
   ENGINEERING_NAV_ITEMS,
@@ -176,12 +177,13 @@ const INTERVIEW_NAV_ITEMS: ReadonlyArray<readonly [InterviewView, string]> = [
 const LEARN_NAV_ITEMS: ReadonlyArray<readonly [LearnDestination, string]> = [
   ["today", "Today"],
   ["courses", "Courses"],
+  ["materials", "Materials"],
   ["history", "History"],
   ["analytics", "Statistics"],
 ];
 function readLearnDestination(currentHref: string): LearnDestination {
   const destination = new URL(currentHref).searchParams.get("learn");
-  return destination === "courses" || destination === "history" || destination === "analytics" ? destination : "today";
+  return destination === "materials" || destination === "courses" || destination === "history" || destination === "analytics" ? destination : "today";
 }
 
 type InitialLocation = {
@@ -206,7 +208,7 @@ function initialInterviewView(location: InitialLocation): View {
 }
 
 function initialLearnDestination(location: InitialLocation): LearnDestination {
-  return location.learn === "courses" || location.learn === "history" || location.learn === "analytics" ? location.learn : "today";
+  return location.learn === "materials" || location.learn === "courses" || location.learn === "history" || location.learn === "analytics" ? location.learn : "today";
 }
 
 function parseEngineeringDestination(value: string | null | undefined): EngineeringView {
@@ -2215,7 +2217,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
         if (stored === "learn") {
           setActiveWorkspace("learn");
           const storedLearn = window.sessionStorage.getItem("interview-arc-learn-destination");
-          if (storedLearn === "courses" || storedLearn === "history" || storedLearn === "analytics") setLearnDestination(storedLearn);
+          if (storedLearn === "materials" || storedLearn === "courses" || storedLearn === "history" || storedLearn === "analytics") setLearnDestination(storedLearn);
         }
       }
       setViewMemoryReady(true);
@@ -4891,7 +4893,8 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     const route = new URL(workspaceViewHref(window.location.href, "learn"), window.location.origin);
     route.searchParams.delete("workspace");
     route.searchParams.delete("engineering");
-    route.searchParams.set("learn", nextDestination);
+      route.searchParams.set("learn", nextDestination);
+      if (nextDestination !== "materials") route.searchParams.delete("material");
     if (nextDestination === "courses" && focus) {
       if (focus.courseId) route.searchParams.set("course", focus.courseId);
       else route.searchParams.delete("course");
@@ -7216,7 +7219,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
             </details>
           </div>
         </header>
-        <div className="page-content" id="practice-content">{activeWorkspace === "engineering" ? <EngineeringWorkspace index={engineering} view={engineeringView} onNavigateView={navigateToEngineering} /> : activeWorkspace === "learn" ? <LearnWorkspace destination={learnDestination} openedFocus={learnCourseFocus} onOpenCourses={(focus) => navigateToLearn("courses", focus)} /> : <>{view === "today" && renderToday()}{loopsSurfaceReady ? <div hidden={view !== "loops"} className="interview-loops-surface">{renderLoops()}</div> : null}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}</>}</div>
+        <div className="page-content" id="practice-content">{activeWorkspace === "engineering" ? <EngineeringWorkspace index={engineering} view={engineeringView} onNavigateView={navigateToEngineering} /> : activeWorkspace === "learn" ? (learnDestination === "materials" ? <LearningMaterials /> : <LearnWorkspace destination={learnDestination} openedFocus={learnCourseFocus} onOpenCourses={(focus) => navigateToLearn("courses", focus)} />) : <>{view === "today" && renderToday()}{loopsSurfaceReady ? <div hidden={view !== "loops"} className="interview-loops-surface">{renderLoops()}</div> : null}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}</>}</div>
       </section>
 
       <div className="tablet-navigation">{activeWorkspace === "learn"

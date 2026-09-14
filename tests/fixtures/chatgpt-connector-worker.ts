@@ -1,4 +1,6 @@
 import { GET as readResourceRoute, POST as uploadResourceRoute } from "../../app/api/study-resources/route";
+import { GET as readMaterialsRoute, POST as publishMaterialRoute } from "../../app/api/learn/materials/route";
+import { GET as readMaterialOriginalRoute } from "../../app/api/learn/materials/source/route";
 // Synthetic authentication provider used only by the isolated local test.
 import worker from "../../mcp-worker/index";
 import { GET as readImportedPracticeRoute } from "../../app/api/chatgpt-practice/route";
@@ -42,6 +44,14 @@ const base64 = (value: string | Uint8Array) => btoa(typeof value === "string" ? 
 const syntheticWorker = {
   async fetch(request: Request, env: Parameters<typeof worker.fetch>[1], ctx: ExecutionContext) {
     await prepareSigningKey(env.DB);
+    if (["/fixture/materials","/fixture/material-source"].includes(new URL(request.url).pathname)) {
+      const headers=new Headers(request.headers);headers.set("x-interview-arc-authenticated-email", "synthetic@example.test");
+      const scoped=new Request(request,{headers});
+      const pathname=new URL(request.url).pathname;
+      if(pathname==="/fixture/material-source")return readMaterialOriginalRoute(scoped);
+      if(request.method==="POST")return publishMaterialRoute(scoped);
+      return readMaterialsRoute(scoped);
+    }
     if (new URL(request.url).pathname === "/fixture/resources") {
       const headers = new Headers(request.headers); headers.set("x-interview-arc-authenticated-email", "synthetic@example.test");
       const scoped = new Request(request, {headers});

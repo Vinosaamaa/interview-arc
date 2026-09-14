@@ -4,6 +4,10 @@ Learn is an owner-private tutoring domain. It is not an Interview specialty and
 must not reuse Interview Activity, outcome, review, publication, or audio
 evidence semantics as a shortcut.
 
+The Materials destination publishes source-grounded notes with preserved
+originals under [the learning materials contract](learning-materials.md),
+independently of Courses, Lessons and Sessions.
+
 ## Durable ownership
 
 - Git owns reviewed Learning Specialist instructions, subject-skill routing,
