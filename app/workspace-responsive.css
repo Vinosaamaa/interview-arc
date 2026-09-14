@@ -220,7 +220,7 @@ body:has(.review-queue-workspace, .banks-page.bounded-list) { overflow: visible;
   }
   .mobile-interview-nav button { min-width: 0; width: 100%; border: 0; border-radius: 10px; background: transparent; color: #9db9b1; font-size: .68rem; font-weight: 720; cursor: pointer; }
   .mobile-interview-nav button.active { background: var(--signal); color: #183a31; }
-  .mobile-learn-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .mobile-learn-nav { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .mobile-engineering-nav { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 @media (max-width: 1100px) {

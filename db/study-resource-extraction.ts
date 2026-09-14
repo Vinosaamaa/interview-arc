@@ -26,7 +26,7 @@ export async function extractStudyResource(bytes: Uint8Array, filename: string):
     } catch { return only("Original PDF saved. Its reading copy could not be parsed. A password, unsupported PDF structure or resource limit may require a separate reading copy."); }
     finally { await pdf?.loadingTask.destroy(); }
   }
-  if (!/^(txt|md|markdown|csv|tsv|json|jsonl|xml|yaml|yml|log|html|htm|css|js|ts|tsx|jsx|java|py|go|rs|c|cpp|h|sql|sh|rb)$/.test(extension)) {
+  if (!/^(txt|vtt|srt|md|markdown|csv|tsv|json|jsonl|xml|yaml|yml|log|html|htm|css|js|ts|tsx|jsx|java|py|go|rs|c|cpp|h|sql|sh|rb)$/.test(extension)) {
     return only("Original saved. This format is not text-readable here yet. Download and attach it directly to a compatible ChatGPT chat, or upload a text/PDF reading copy.");
   }
   let source: string;

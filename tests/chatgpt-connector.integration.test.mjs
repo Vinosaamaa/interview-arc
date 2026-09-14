@@ -58,6 +58,17 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     assert.equal((await fetch(`${base}/mcp`, { headers: { "cf-access-jwt-assertion": assertion } })).status, 401);
     client = new Client({ name: "Synthetic connector", version: "1" });
     await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/chatgpt/mcp`), { requestInit: { headers: { "cf-access-jwt-assertion": assertion } } }));
+    const materialSource=await client.callTool({name:'save_learning_source_text',arguments:{operationId:'material-source',title:'Synthetic learning transcript',text:'00:00 Exact original source. Stable identities prevent duplicate writes.\n01:20 Changed payloads need a new identity.'}});
+    assert.ok(!materialSource.isError,JSON.stringify(materialSource));
+    const originalMaterial=materialSource.structuredContent.resource;
+    const materialRequest={operationId:'material-publish',title:'Synthetic learning material',kind:'youtube',sourceUrl:'https://www.youtube.com/watch?v=synthetic01',resourceId:originalMaterial.resourceId,sourceSha256:originalMaterial.sourceSha256,coverage:'complete',limitations:[],summary:{overview:'The complete synthetic transcript describes stable identities and explains how changed payloads are handled.',sections:[{heading:'Preserving intent',body:'A stable operation identity lets an exact retry return the original write. Changing the payload requires a new identity so earlier work remains preserved and visible.',sourceLocation:'00:00–01:20'}],keyNotes:['Keep the original separately from the summary.']}};
+    const publishedMaterial=await client.callTool({name:'publish_learning_material',arguments:materialRequest});assert.ok(!publishedMaterial.isError,JSON.stringify(publishedMaterial));
+    const materialId=publishedMaterial.structuredContent.materialId;
+    assert.equal((await client.callTool({name:'publish_learning_material',arguments:materialRequest})).structuredContent.duplicate,true);
+    const materialRead=await fetch(base+'/fixture/materials?materialId='+materialId);assert.equal(materialRead.status,200);assert.deepEqual((await materialRead.json()).summary,materialRequest.summary);
+    const sourcePreview=await fetch(base+'/fixture/material-source?materialId='+materialId);assert.equal(sourcePreview.status,200);assert.match(sourcePreview.headers.get('content-security-policy'),/sandbox; default-src 'none'/);assert.ok((await sourcePreview.text()).endsWith('new identity.'));
+    assert.equal((await fetch(base+'/fixture/materials',{method:'POST',headers:{origin:'https://foreign.example'}})).status,403);
+
     assert.equal(client.getInstructions(), await readFile(new URL("../docs/agents/chatgpt-practice-prompt.md", import.meta.url), "utf8"));
     const names = (await client.listTools()).tools.map((tool) => tool.name);
     assert.deepEqual(names.sort(), [...CHATGPT_PRACTICE_TOOLS].sort());
