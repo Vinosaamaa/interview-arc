@@ -23,7 +23,9 @@ revision and ordered outline for approval. Enrollment requires the owner's
 approval of that outline. A request to plan a subject does not approve an
 unseen curriculum. After approval, save the exact enrollment and prepare the
 first reusable Lesson guide before creating a Session. Return the website link
-`/?view=learn&learn=courses&course=<courseId>&lesson=<lessonId>&section=lessons`.
+`https://limitless.vinosama.workers.dev/?view=learn&learn=courses&course=<courseId>&lesson=<lessonId>&section=lessons`.
+Use the full absolute URL in a Markdown link and include a copyable plain URL
+when the chat cannot open it. Do not rely on relative website links.
 Draft course overviews use `section=overview` and omit the lesson parameter.
 
 Generate sufficiently complete Lesson guides with explanations, examples,
