@@ -14,6 +14,7 @@ import { savePracticeSolutionPublication, type PracticeSolutionPublicationInput 
 import { registerLeetcodeTools } from "./leetcode-tools";
 import { registerCodingTools } from "./coding-tools";
 import { registerCoachingTools } from "./coaching-tools";
+import { registerLearningCoachingTools } from "./learning-coaching-tools";
 import { registerDrawingTools } from "./drawing-tools";
 import { routeExcalidrawProxy } from "./excalidraw-proxy";
 import { resolveChatgptAccessOwner, type ChatgptAccessConfig } from "./chatgpt-access";
@@ -2639,6 +2640,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
   registerLeetcodeTools(server, env.AUDIO, ownerId);
   registerCodingTools(server, env.DB, env.AUDIO, ownerId);
   registerCoachingTools(server);
+  registerLearningCoachingTools(server);
   registerStudyResourceTools(server, env.DB, env.AUDIO, ownerId);
   registerLearningMaterialTools(server, env.DB, env.AUDIO, ownerId);
   registerLecturePlayerTools(server, env.DB, env.AUDIO, ownerId, env.OPENAI_API_KEY);

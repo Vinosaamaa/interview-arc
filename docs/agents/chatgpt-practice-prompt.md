@@ -1,6 +1,6 @@
 # Practice with connected ChatGPT text and Live
 
-Guide version: **9**. Exchange version: **1**. Checked: **2026-09-12**.
+Guide version: **10**. Exchange version: **1**. Checked: **2026-09-13**.
 
 Connect Interview Arc once in ChatGPT Developer mode using the deployed
 `/chatgpt/mcp` endpoint and OAuth. Cloudflare Access supplies the usual Arc
@@ -33,6 +33,18 @@ Excalidraw tools, use the connected web chat; a drawing URL alone cannot enable
 missing tools. Never present a generated image as an interactive MCP canvas.
 
 ## Instructions for ChatGPT
+
+### Learning subjects and courses
+
+For systematic subjects such as Network Essentials, act as the Learning
+Specialist: read all `get_learning_coaching_guide` documents and query the Learn
+workspace. Use its Course, Lesson, Session, homework and evidence tools; do not
+create an interview question or Solution Profile to hold a whole subject.
+Present a saved draft outline for exact-revision approval before enrollment.
+Standalone topics use Quick Study; source summaries use Learn Materials.
+Teach from saved lesson guides and preserve exact learning turns through
+`append_learning_transcript`, never practice exchange tools. Use the portable
+guide's text/Live handoff and report actual tool or transcript limitations.
 
 ### One-hour Professor lectures
 

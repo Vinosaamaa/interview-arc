@@ -31,6 +31,7 @@ import {
 
 import HeroQuote from "./hero-quote";
 import WorkspaceHeroMetrics from "./workspace-hero-metrics";
+import LearnCoursePrompt from "./learn-course-prompt";
 
 import "./learn-workspace.css";
 
@@ -464,7 +465,8 @@ function CourseIndex({
   onSelectQuickStudy: (lessonId: string) => void;
 }) {
   return <nav className="learn-course-index" aria-label="Courses and Quick Studies">
-    <header><span className="learn-eyebrow">COURSES</span><h2>{courses.length} Blueprint{courses.length === 1 ? "" : "s"}</h2><p>Select a Course to change the reader.</p></header>
+    <header><span className="learn-eyebrow">YOUR COURSE CATALOG</span><h2>{courses.length} course{courses.length === 1 ? "" : "s"}</h2><p>Choose a subject. Follow its learning path.</p></header>
+    <LearnCoursePrompt />
     {courses.map((course) => <button type="button" key={course.course.courseId} className={selectedCourse?.course.courseId === course.course.courseId ? "active" : ""} aria-current={selectedCourse?.course.courseId === course.course.courseId ? "true" : undefined} onClick={() => onSelectCourse(course.course.courseId)}><span>{enrollmentCopy(course)}</span><strong>{course.course.title}</strong><small>{course.lessons.filter((lesson) => lesson.state === "completed").length} / {flattenCourseLessons(courseModulePath(payload, course)).length} lessons · Course {course.course.state}</small></button>)}
     {quickStudies.length > 0 && <div className="learn-course-index-divider"><span className="learn-eyebrow">QUICK STUDIES</span><small>{quickStudies.length} standalone</small></div>}
     {quickStudies.map((study) => <button type="button" key={study.lesson.lessonId} className={selectedQuickStudy?.lesson.lessonId === study.lesson.lessonId ? "active" : ""} aria-current={selectedQuickStudy?.lesson.lessonId === study.lesson.lessonId ? "true" : undefined} onClick={() => onSelectQuickStudy(study.lesson.lessonId)}><span>{study.lesson.state}</span><strong>{study.lesson.title}</strong><small>Current lesson r{study.current?.revision ?? study.lesson.currentRevision}</small></button>)}
@@ -507,7 +509,7 @@ function CourseOverview({ payload, course, onOpenLessons }: { payload: LearnPayl
     <p className="learn-overview-outcome">{course.blueprint?.intendedOutcome || "Intended outcome is not recorded yet."}</p>
     <dl className="learn-overview-facts">
       <div><dt>Course state</dt><dd>{statusLabel(course.course.state)}</dd></div>
-      <div><dt>Approved Blueprint</dt><dd>r{course.enrollment?.blueprintRevision ?? course.blueprint?.revision ?? course.course.currentBlueprintRevision}</dd></div>
+      <div><dt>{course.enrollment ? "Approved outline" : "Draft outline"}</dt><dd>r{course.enrollment?.blueprintRevision ?? course.blueprint?.revision ?? course.course.currentBlueprintRevision}</dd></div>
       <div><dt>Current module</dt><dd>{current?.module.title ?? "None"}</dd></div>
       <div><dt>Current lesson</dt><dd>{current?.lesson.title ?? "None"}</dd></div>
       <div><dt>Lessons written</dt><dd>{progress.writtenLessons} / {progress.totalLessons}</dd></div>
@@ -908,7 +910,7 @@ export default function LearnWorkspace({
     {destination === "courses" && (courses.length || quickStudies.length ? selectedQuickStudy
       ? <div className="learn-courses-layout learn-quick-study-layout learn-frame">{courseIndex}<QuickStudyWorkspace payload={payload} study={selectedQuickStudy} busy={busy} onHomework={(item) => void setHomework(item)} /></div>
       : selectedCourse && <CourseWorkspace payload={payload} course={selectedCourse} courseIndex={courseIndex} section={courseSection} onSection={setCourseSection} selectedLessonId={selectedLessonId} onSelectLesson={(lessonId) => selectLessonWithoutMutatingEnrollment(selectedCourse.course.courseId, lessonId)} mobilePane={mobilePane} onMobilePane={setMobilePane} busy={busy} onHomework={(item) => void setHomework(item)} />
-      : <EmptyLearn destination="courses" />)}
+      : <div className="learn-frame"><LearnCoursePrompt /><EmptyLearn destination="courses" /></div>)}
     {destination === "history" && <HistoryView payload={payload} />}
     {destination === "analytics" && <AnalyticsView payload={payload} />}
   </div>;

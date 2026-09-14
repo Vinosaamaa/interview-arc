@@ -1,4 +1,5 @@
 import { resourceHtml, resourcePdf, resourcePng } from "./fixtures/study-resource-content.mjs";
+import { verifyLearningChatgptFlow } from "./helpers/learning-chatgpt-flow.mjs";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -58,6 +59,7 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     assert.equal((await fetch(`${base}/mcp`, { headers: { "cf-access-jwt-assertion": assertion } })).status, 401);
     client = new Client({ name: "Synthetic connector", version: "1" });
     await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/chatgpt/mcp`), { requestInit: { headers: { "cf-access-jwt-assertion": assertion } } }));
+    await verifyLearningChatgptFlow(client);
     const materialSource=await client.callTool({name:'save_learning_source_text',arguments:{operationId:'material-source',title:'Synthetic learning transcript',text:'00:00 Exact original source. Stable identities prevent duplicate writes.\n01:20 Changed payloads need a new identity.'}});
     assert.ok(!materialSource.isError,JSON.stringify(materialSource));
     const originalMaterial=materialSource.structuredContent.resource;
