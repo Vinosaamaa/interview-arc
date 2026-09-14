@@ -47,7 +47,10 @@ const syntheticWorker = {
     if (["/fixture/materials","/fixture/material-source"].includes(new URL(request.url).pathname)) {
       const headers=new Headers(request.headers);headers.set("x-interview-arc-authenticated-email", "synthetic@example.test");
       const scoped=new Request(request,{headers});
-      return new URL(request.url).pathname==="/fixture/material-source"?readMaterialOriginalRoute(scoped):request.method==="POST"?publishMaterialRoute(scoped):readMaterialsRoute(scoped);
+      const pathname=new URL(request.url).pathname;
+      if(pathname==="/fixture/material-source")return readMaterialOriginalRoute(scoped);
+      if(request.method==="POST")return publishMaterialRoute(scoped);
+      return readMaterialsRoute(scoped);
     }
     if (new URL(request.url).pathname === "/fixture/resources") {
       const headers = new Headers(request.headers); headers.set("x-interview-arc-authenticated-email", "synthetic@example.test");

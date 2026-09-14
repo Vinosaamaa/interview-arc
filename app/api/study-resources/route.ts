@@ -1,21 +1,13 @@
 import { env } from "cloudflare:workers";
 import { ZodError } from "zod";
 import { resolveOwnerId } from "../../../db/owner";
-import { boundedResourceStream } from "../../../db/study-resource-body";
+import { boundedResourceStream, boundedResourceBody } from "../../../db/study-resource-body";
 import { MAX_RESOURCE_BYTES, ResourceError, resourceIdSchema } from "../../../db/study-resource-policy";
 import { getStudyResource, linkStudyResource, readStudyOriginal, resourceImageType, saveStudyResource, searchStudyResources } from "../../../db/study-resources";
 
 const headers = { "Cache-Control": "private, no-store" };
 function failure(error: unknown) {
   return Response.json({ error: error instanceof ResourceError ? error.message : error instanceof ZodError || error instanceof SyntaxError ? "Invalid resource request." : "Resource operation was not confirmed. Retry the same upload." }, { status: error instanceof ResourceError ? error.status : error instanceof ZodError || error instanceof SyntaxError ? 400 : 503, headers });
-}
-export async function boundedResourceBody(request: Request, limit: number) {
-  if (Number(request.headers.get("content-length")) > limit) throw new ResourceError("Upload exceeds the supported size.",413);
-  const reader = request.body?.getReader(); if (!reader) throw new ResourceError("Upload body is missing.");
-  const chunks: Uint8Array[] = []; let size=0;
-  try { while (true) { const {done,value}=await reader.read(); if(done)break; size+=value.length; if(size>limit)throw new ResourceError("Upload exceeds the supported size.",413); chunks.push(value); } }
-  catch(e) { await reader.cancel().catch(()=>undefined); throw e; } finally { reader.releaseLock(); }
-  const bytes=new Uint8Array(size); let offset=0; for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;} return bytes;
 }
 export async function POST(request: Request) {
   try {

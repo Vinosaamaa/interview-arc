@@ -1418,8 +1418,10 @@ test("every workspace keeps timer, export, and connect in one tools menu", async
   assert.doesNotMatch(source, /topbar-tool-group/);
   assert.doesNotMatch(source, /<Icon name="clock"/);
   assert.doesNotMatch(source, /view === "today" && pipSupported/);
-  assert.doesNotMatch(source, /activeWorkspace === "learn" \?\s*\(/);
-  assert.doesNotMatch(source, /activeWorkspace === "engineering" \? null/);
+  const topbar = source.slice(source.indexOf('<header className="topbar'), source.indexOf('<div className="page-content"'));
+  assert.ok(topbar.includes('topbar-tools'), "inspect the shared toolbar, not destination content");
+  assert.doesNotMatch(topbar, /activeWorkspace === "learn" \?\s*\(/);
+  assert.doesNotMatch(topbar, /activeWorkspace === "engineering" \? null/);
 });
 
 test("narrow chrome hides the destination sidebar instead of squeezing it", async () => {

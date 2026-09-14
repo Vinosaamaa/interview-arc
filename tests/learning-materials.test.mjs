@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync,readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
-import { publishLearningMaterial,getLearningMaterial,listLearningMaterials } from '../db/learning-materials.ts';
+import { publishLearningMaterial,getLearningMaterial,listLearningMaterials,getLearningMaterialSource } from '../db/learning-materials.ts';
 import { saveStudyResource,getStudyResource,readStudyOriginal } from '../db/study-resources.ts';
 import { registerLearningMaterialTools } from '../mcp-worker/learning-material-tools.ts';
 import { importLearningSource, publicSourceUrl } from '../db/learning-source-import.ts';
@@ -28,6 +28,8 @@ test('publication keeps full source, exact retries replay, changed writes and ot
  const found=await listLearningMaterials(f.db,'a','stable operation');assert.equal(found.materials.length,1);
  let next=0,text='';do{const page=await getStudyResource(f.db,'a',s.resource.resourceId,next,s.resource.sourceSha256);text+=page.fragment.text;next=page.nextChunk;}while(next!==null);
  assert.ok(text.endsWith('LAST SOURCE LINE'));assert.equal(text,new TextDecoder().decode(await (await readStudyOriginal(f.db,f.bucket,'a',s.resource.resourceId)).object.arrayBuffer()));
+ const full=await getLearningMaterialSource(f.db,'a',first.materialId);assert.equal(full.fragments.map(f=>f.text).join(''),text);assert.equal(full.nextChunk,null);
+ await assert.rejects(getLearningMaterialSource(f.db,'b',first.materialId),/not found/);
 });
 test('source integrity, required coverage and URL identity are validated before publication',async t=>{
  const f=fixture(t),v=input(await source(f));
