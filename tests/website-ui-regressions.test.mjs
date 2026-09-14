@@ -1143,7 +1143,7 @@ test("every workspace hero uses one localized draw pulse and sweep with a static
   const [interviewSource, interviewCss, learnSource, learnCss, engineeringSource, engineeringCss] = await Promise.all([
     load("../app/interview-page-hero.tsx"),
     load("../app/interview-page-hero.css"),
-    load("../app/learn-workspace.tsx"),
+    Promise.all([load("../app/learn-workspace.tsx"), load("../app/learn-page-hero.tsx")]).then(parts => parts.join("\n")),
     load("../app/learn-workspace.css"),
     load("../app/engineering-workspace.tsx"),
     load("../app/engineering-workspace.css"),
@@ -1209,7 +1209,7 @@ test("Learn and Engineering hero type stays inside the 350px panel", async () =>
 
 test("every workspace top panel has a quote and a display statement", async () => {
   const [learn, engineering, hero, home, materials, loops, reviews, learnCss, interviewCss, engineeringCss] = await Promise.all([
-    load("../app/learn-workspace.tsx"),
+    Promise.all([load("../app/learn-workspace.tsx"), load("../app/learn-page-hero.tsx")]).then(parts => parts.join("\n")),
     load("../app/engineering-workspace.tsx"),
     load("../app/interview-page-hero.tsx"),
     load("../app/home-client.tsx"),
@@ -1224,8 +1224,8 @@ test("every workspace top panel has a quote and a display statement", async () =
   assert.match(learn, /title: "The conversation stays\."/);
   assert.match(learn, /quote: "Exact and private\."/);
   assert.match(learn, /className="learn-hero-quote"/);
-  assert.match(learn, /<HeroQuote className="learn-hero-quote">\{copy\.quote\}<\/HeroQuote>/);
-  assert.match(learn, /className="learn-hero-lede">\{copy\.description\}/);
+  assert.match(learn, /<HeroQuote className="learn-hero-quote">\{quote\}<\/HeroQuote>/);
+  assert.match(learn, /className="learn-hero-lede">\{description\}/);
   assert.doesNotMatch(learn, /<h1>\{copy\.title\}<br/);
   assert.equal((learn.match(/quote:\s*"[^"]+"/g) ?? []).length, 4);
 
@@ -1263,7 +1263,7 @@ test("Interview, Learn, and Engineering share the Interview hero metric band", a
     load("../app/workspace-hero-metrics.css"),
     load("../app/layout.tsx"),
     load("../app/interview-page-hero.tsx"),
-    load("../app/learn-workspace.tsx"),
+    Promise.all([load("../app/learn-workspace.tsx"), load("../app/learn-page-hero.tsx")]).then(parts => parts.join("\n")),
     load("../app/engineering-workspace.tsx"),
     load("../app/interview-page-hero.css"),
     load("../app/learn-workspace.css"),
@@ -1303,7 +1303,10 @@ test("Interview, Learn, and Engineering share the Interview hero metric band", a
   assert.match(interviewCss, /--workspace-hero-metric-accent:\s*var\(--page-accent\)/);
   assert.match(learnCss, /--workspace-hero-metric-accent:\s*var\(--learn-blue-deep\)/);
   assert.match(engineeringCss, /--workspace-hero-metric-accent:\s*var\(--engineering-accent\)/);
-  assert.doesNotMatch(learnCss, /\.learn-hero-metrics\s*\{/);
+  assert.doesNotMatch(learnCss, /^\.learn-hero-metrics\s*\{/m);
+  const phoneMetrics = cssRules(parseCss(learnCss), ".learn-hero .learn-hero-metrics", "max-width: 600px").at(-1)?.declarations;
+  assert.equal(phoneMetrics?.position, "static");
+  assert.equal(phoneMetrics?.display, undefined);
   assert.doesNotMatch(engineeringCss, /\.engineering-hero dl/);
   assert.doesNotMatch(engineeringCss, /height:\s*64px/);
 });
