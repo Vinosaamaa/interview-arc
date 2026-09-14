@@ -96,7 +96,14 @@ test("bundled dedicated MCP route authenticates privately and reuses existing pr
     assert.equal(inChatAudio.status, 206);
     assert.equal((await inChatAudio.arrayBuffer()).byteLength, 10);
     assert.equal((await fetch(localTicketUrl, { method: "POST" })).status, 405);
-    const playerWidget = await client.readResource({ uri: "ui://interview-arc/lecture-player-v5.html" });
+    const playerWidget = await client.readResource({ uri: "ui://interview-arc/lecture-player-v6.html" });
+    assert.doesNotMatch(playerWidget.contents[0].text,/continueMessage|Continue in ChatGPT/);
+    const controls = await client.callTool({name:"open_live_chat_controls",arguments:{}});
+    assert.equal(controls.isError,undefined);
+    const controlWidget = await client.readResource({uri:"ui://interview-arc/live-chat-controls-v1.html"});
+    assert.match(controlWidget.contents[0].text,/Live Chat Controls/);
+    assert.doesNotMatch(controlWidget.contents[0].text,/speechSynthesis|<audio|save_lecture_position/);
+    new Script(controlWidget.contents[0].text.match(/<script>([\s\S]*)<\/script>/)[1]);
     const filePicker = await client.callTool({ name: "open_study_resource_uploader", arguments: {} });
     assert.equal(filePicker.isError, undefined, JSON.stringify(filePicker));
     const fileWidget = await client.readResource({ uri: "ui://interview-arc/study-resource-uploader-v2.html" });
