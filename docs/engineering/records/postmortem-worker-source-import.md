@@ -3,7 +3,7 @@ schemaVersion: 1
 id: postmortem-worker-source-import
 revision: 1
 type: postmortem
-status: accepted
+status: closed
 title: Worker source imports rejected an unsupported redirect option
 repository: interview-arc
 capabilityIds: ["learning-workspace"]
