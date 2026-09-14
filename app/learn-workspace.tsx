@@ -206,15 +206,16 @@ function EmptyLearn({ destination }: { destination: LearnDestination }) {
     <aside className="learn-context-rail learn-empty-index" aria-label={history ? "Completed Learning Sessions" : "Courses and Quick Studies"}>
       <header>
         <span className="learn-eyebrow">{history ? "COMPLETED SESSIONS" : "COURSES"}</span>
-        <h2>{history ? "0 records" : "0 Blueprints"}</h2>
+        <h2>{history ? "0 records" : "Your course catalog"}</h2>
         <p>{history ? "Finished Learning Sessions will appear here in chronological order." : "Saved Courses and Quick Studies will appear here."}</p>
       </header>
+      {!history && <LearnCoursePrompt />}
     </aside>
     <section className="learn-empty" aria-labelledby="learn-empty-title">
-      <span className="learn-eyebrow">LEARNING SPECIALIST REQUIRED</span>
-      <h2 id="learn-empty-title">{history ? "No completed Learning Sessions yet." : "Your first Course starts in the specialist."}</h2>
-      <p>The website is the durable Course and reading surface. Ask the Learning Specialist to propose a Blueprint or create a Quick Study; it will appear here after the exact owner-private revision is saved.</p>
-      <code>Initialize Interview Arc — Learning Specialist</code>
+      <span className="learn-eyebrow">LEARN WITH CHATGPT OR CODEX</span>
+      <h2 id="learn-empty-title">{history ? "Your learning history starts here." : "Start with a subject."}</h2>
+      <p>{history ? "Finished sessions keep your conversation, notes and next steps here." : "Ask your connected Learning Specialist to plan a course. Review the outline, then follow lessons, examples and homework at your own pace. Your course and progress will appear here."}</p>
+      {!history && <blockquote>“Help me learn Network Essentials. Plan a course in Interview Arc and show me the outline.”</blockquote>}
     </section>
   </div>;
 }
@@ -910,7 +911,7 @@ export default function LearnWorkspace({
     {destination === "courses" && (courses.length || quickStudies.length ? selectedQuickStudy
       ? <div className="learn-courses-layout learn-quick-study-layout learn-frame">{courseIndex}<QuickStudyWorkspace payload={payload} study={selectedQuickStudy} busy={busy} onHomework={(item) => void setHomework(item)} /></div>
       : selectedCourse && <CourseWorkspace payload={payload} course={selectedCourse} courseIndex={courseIndex} section={courseSection} onSection={setCourseSection} selectedLessonId={selectedLessonId} onSelectLesson={(lessonId) => selectLessonWithoutMutatingEnrollment(selectedCourse.course.courseId, lessonId)} mobilePane={mobilePane} onMobilePane={setMobilePane} busy={busy} onHomework={(item) => void setHomework(item)} />
-      : <div className="learn-frame"><LearnCoursePrompt /><EmptyLearn destination="courses" /></div>)}
+      : <EmptyLearn destination="courses" />)}
     {destination === "history" && <HistoryView payload={payload} />}
     {destination === "analytics" && <AnalyticsView payload={payload} />}
   </div>;

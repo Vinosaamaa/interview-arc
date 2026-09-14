@@ -6,6 +6,10 @@ state. The Learning Specialist owns tutoring, Course Blueprint proposals, and
 Lesson revisions. It is not an Interview-practice specialist and must not use
 Interview Activity, outcome, review, publication, or audio evidence semantics.
 
+Connected ChatGPT also follows [`chatgpt.md`](chatgpt.md), served with these
+instructions through `get_learning_coaching_guide`; local skill files are not
+assumed to load automatically in that client.
+
 ## Ownership And Scope
 
 - Only the Learning Specialist may call `create_learning_course_blueprint`,
