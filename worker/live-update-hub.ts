@@ -7,6 +7,7 @@ export type LiveUpdateScope =
   | "live"
   | "publication"
   | "behavioral_target"
+  | "learning"
   | `voice_delivery_retry:${string}`;
 
 export type LiveUpdateNamespace = DurableObjectNamespace;

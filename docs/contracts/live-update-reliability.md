@@ -27,6 +27,7 @@ a replacement database.
   Voice- or Companion-originated session, activity, focus-block, workbench, and
   publication changes cannot leave an already-open Today view structurally
   stale.
+- Learn mutations from ChatGPT and the website publish `learning` invalidation after commit. Open Learn readers reload the authoritative projection, ignore out-of-order responses, and reconcile on focus/visibility restoration. Active sessions retain priority over newer planned sessions; equal-state candidates use latest update time.
 - Event publication is best effort after the authoritative mutation commits.
   A hub outage must never turn a successful D1 mutation into a client-visible
   failure; bounded snapshot recovery closes that gap.

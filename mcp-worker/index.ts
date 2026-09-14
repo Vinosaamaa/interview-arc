@@ -3698,6 +3698,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
     async (input) => {
       try {
         const result = await createLearningCourseBlueprint(ownerId, input);
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "learning");
         return {
           content: [{ type: "text", text: `Draft Course ${result.courseId} Blueprint revision ${result.blueprintRevision} is saved for review.` }],
           structuredContent: result,
@@ -3718,6 +3719,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
     async (input) => {
       try {
         const result = await reviseLearningCourseBlueprint(ownerId, input);
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "learning");
         return {
           content: [{ type: "text", text: `Course ${result.courseId} Blueprint revision ${result.blueprintRevision} is saved.` }],
           structuredContent: result,
@@ -3738,6 +3740,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
     async (input) => {
       try {
         const result = await approveLearningEnrollment(ownerId, input);
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "learning");
         return {
           content: [{ type: "text", text: `Enrollment ${result.enrollmentId} is active on Course ${result.courseId} Blueprint revision ${result.blueprintRevision}.` }],
           structuredContent: result,
@@ -3758,6 +3761,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
     async (input) => {
       try {
         const result = await saveLearningLessonRevision(ownerId, input);
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "learning");
         return {
           content: [{ type: "text", text: `Learning Lesson ${result.lessonId} revision ${result.lessonRevision} is saved.` }],
           structuredContent: result,
@@ -3798,6 +3802,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
     async (input) => {
       try {
         const result = await createLearningSession(ownerId, input);
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "learning");
         return {
           content: [{ type: "text", text: `Learning Session ${result.sessionId} is ready on Lesson revision ${result.lessonRevision}.` }],
           structuredContent: result,
@@ -3818,6 +3823,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
     async (input) => {
       try {
         const result = await controlLearningSession(ownerId, input);
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "learning");
         return {
           content: [{ type: "text", text: `Learning Session ${result.sessionId} is ${result.state}.` }],
           structuredContent: result,
@@ -3838,6 +3844,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
     async (input) => {
       try {
         const result = await appendLearningTranscript(ownerId, input);
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "learning");
         return {
           content: [{ type: "text", text: `Learning transcript revision ${result.transcriptRevision} is saved for ${result.sessionId}.` }],
           structuredContent: result,
@@ -3898,6 +3905,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
     async (input) => {
       try {
         const result = await setLearningHomeworkState(ownerId, input);
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "learning");
         return {
           content: [{ type: "text", text: `Homework ${result.homeworkId} revision ${result.revision} is ${result.state}.` }],
           structuredContent: result,
@@ -3918,6 +3926,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext, chatgpt 
     async (input) => {
       try {
         const result = await finishLearningSession(ownerId, input);
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "learning");
         return {
           content: [{ type: "text", text: `Learning Session ${result.sessionId} is completed at finalization revision ${result.finalizationRevision}.` }],
           structuredContent: result,

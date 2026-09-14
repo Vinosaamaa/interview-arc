@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep, basename } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -608,6 +608,8 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     const read = await call(client, "query_learning_sessions", { sessionId: createSessionInput.sessionId });
     assert.equal(read.sessions.length, 1);
     assert.equal(read.sessions[0].session.state, "completed");
+    assert.equal(read.sessions[0].lesson.revision, read.sessions[0].session.lessonRevision);
+    assert.equal(read.sessions[0].lesson.title, lesson.title);
     assert.equal(read.sessions[0].evidencePolicy, "transcript_only");
     assert.deepEqual(read.sessions[0].turns.map((turn) => turn.turnId), [
       "learner-turn-0",
@@ -880,7 +882,11 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     await client?.close().catch(() => {});
     await otherClient?.close().catch(() => {});
     await stopMcpWorker(worker);
-    if (persistence) await rm(persistence, { recursive: true, force: true });
-    await releaseLock?.();
+    try {
+      if (persistence) {
+        assert.ok(resolve(persistence).startsWith(resolve(tmpdir()) + sep) && basename(persistence).startsWith("interview-arc-learn-session-"));
+        await rm(persistence, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+      }
+    } finally { await releaseLock?.(); }
   }
 });

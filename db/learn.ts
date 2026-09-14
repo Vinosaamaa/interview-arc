@@ -1826,7 +1826,7 @@ export async function queryLearningSessions(ownerId: string, inputValue: unknown
     input.includeCompleted ? undefined : ne(learningSessions.state, "completed"),
   )).orderBy(desc(learningSessions.updatedAt)).limit(100);
   const sessions = await Promise.all(rows.map(async (session) => {
-    const [intervals, turns] = await Promise.all([
+    const [intervals, turns, lessonRows] = await Promise.all([
       db.select().from(learningSessionIntervals).where(and(
         eq(learningSessionIntervals.ownerId, ownerId),
         eq(learningSessionIntervals.sessionId, session.sessionId),
@@ -1835,9 +1835,15 @@ export async function queryLearningSessions(ownerId: string, inputValue: unknown
         eq(learningTranscriptTurns.ownerId, ownerId),
         eq(learningTranscriptTurns.sessionId, session.sessionId),
       )).orderBy(asc(learningTranscriptTurns.sequence)),
+      db.select().from(learningLessonRevisions).where(and(
+        eq(learningLessonRevisions.ownerId, ownerId),
+        eq(learningLessonRevisions.lessonId, session.lessonId),
+        eq(learningLessonRevisions.revision, session.lessonRevision),
+      )).limit(1),
     ]);
     return {
       session: withoutOwnerId(session),
+      lesson: lessonRows[0] ? displayLesson(lessonRows[0]) : null,
       intervals: intervals.map(withoutOwnerId),
       turns: turns.map(withoutOwnerId),
       evidencePolicy: "transcript_only" as const,

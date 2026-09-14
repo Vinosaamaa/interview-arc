@@ -841,3 +841,24 @@
 .learn-course-prompt input{width:100%;min-width:0;min-height:44px;border:1px solid #b7c9bf;border-radius:7px;background:white;padding:10px;font:inherit;color:inherit}
 .learn-course-prompt p{font-size:14px;line-height:1.6;overflow-wrap:anywhere}.learn-course-prompt button{min-height:44px;padding:10px 12px;border:0;border-radius:7px;background:#215a50;color:white;font:inherit;cursor:pointer}
 .learn-course-prompt :is(input,button,summary):focus-visible{outline:3px solid #698b43;outline-offset:3px}.learn-course-prompt-text{margin-top:12px}.learn-course-prompt-text summary{font-size:13px;min-height:44px;display:flex;align-items:center;cursor:pointer}
+
+/* Shared reader geometry at phone, 720p, 1080p and 4K viewports. */
+.learn-hero-copy h1 { flex-shrink: 0; font-size: clamp(2rem, 3vw, 3rem); line-height: 1.16; }
+.learn-hero-copy { bottom: 64px; }
+.learn-hero-copy > a { font-size: 14px; margin-top: 10px; }
+.learn-hero-lede { font-size: 14px; }
+.learn-lesson-reader :is(p, li), .learn-history-record :is(p, li) { max-width: 75ch; }
+.learn-lesson-reader, .learn-history-record { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+ .learn-hero { height: auto; min-height: 0; padding: 0 0 8px; border: 0; background: none; }
+ .learn-hero::before, .learn-hero .learn-animal-sketch, .learn-hero-pulse, .learn-hero-light-band { display: none; }
+ .learn-hero-copy { position: static; width: 100%; padding: 0 4px; }
+ .learn-hero-copy h1 { font-size: 32px; margin: 8px 0 12px; max-width: none; }
+ .learn-hero-quote, .learn-hero-lede { display: none; }
+ .learn-hero .learn-hero-metrics { position: static; margin-top: 14px; min-height: 50px; }
+}
+
+.learn-recent-session { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px; padding:20px 24px; border:1px solid var(--learn-rule); border-radius:14px; background:var(--learn-paper); }
+.learn-recent-session strong { display:block; margin-top:6px; font-family:var(--font-editorial),Georgia,serif; font-size:24px; font-weight:500; }
+.learn-recent-session p { font-size:14px; color:var(--learn-muted); margin:6px 0 0; }
+.learn-recent-session button { min-height:44px; }

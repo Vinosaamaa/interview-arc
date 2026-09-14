@@ -6,6 +6,7 @@ import type { StudyResource } from "../../db/study-resources";
 import { resourceTeachingPrompt } from "../../db/study-resource-policy";
 import { pdfPageImages } from "./pdf-pages";
 import "./resources.css";
+import LearnPageHero from "../learn-page-hero";
 
 type Reading = { resource: StudyResource; fragment: { location: string; text: string; ordinal: number } | null; nextChunk: number | null; readingCopies: { resourceId: string; page: number }[] };
 type Upload = { file: File | null; filename: string; operationId: string; state: string; resource?: StudyResource };
@@ -29,6 +30,7 @@ export default function ResourceLibrary() {
   const [jobs, setJobs] = useState<Upload[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [notice, setNotice] = useState(""), [prompt, setPrompt] = useState("");
   const [ready, setReady] = useState(false);
+  const [mobilePane, setMobilePane] = useState<"index" | "reader">("index");
   const selection = useRef(0), searchRevision = useRef(0), displayedQuery = useRef(""), loadingOffsets = useRef(new Set<number>());
   const load = useCallback(async (offset = 0, search = "") => {
     const revision = offset === 0 ? ++searchRevision.current : searchRevision.current;
@@ -55,7 +57,7 @@ export default function ResourceLibrary() {
     const ticket = ++selection.current; setError("");
     try {
       const data = await request<Reading>(`/api/study-resources?resourceId=${resource.resourceId}&chunk=${chunk}&sha256=${resource.sourceSha256}`);
-      if (ticket === selection.current) { setReading(data); setPrompt(""); }
+      if (ticket === selection.current) { setReading(data); setPrompt(""); setMobilePane("reader"); }
     } catch (e) { if (ticket === selection.current) setError((e as Error).message); }
   }
   async function run(queue: Upload[]) {
@@ -91,12 +93,13 @@ export default function ResourceLibrary() {
       setNotice("Page images saved for ChatGPT."); await open(reading.resource);
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
-  return <main className="resources-page">
-    <header><Link href="/">← Interview Arc</Link><p className="resource-eyebrow">YOUR STUDY LIBRARY</p><h1>Keep the whole source.</h1><p>Upload once. Read here, or ask connected ChatGPT to teach and practise from your material.</p></header>
+  return <section className="resources-page learn-workspace">
+    <LearnPageHero destination="library" eyebrow="LEARN · LIBRARY" title="Keep the whole source." quote="Your material, ready to return to." description="Upload once. Read here, or ask connected ChatGPT to teach from the complete original." metrics={[{label: nextOffset === null ? "Resources" : "Resources loaded", value:items.length}, {label:"Originals",value:"Preserved"}, {label:"Upload limit",value:"25 MB"}]} action={<Link href="/?view=learn&learn=materials">← Published materials</Link>}/>
+
     <section className="resource-upload" aria-labelledby="upload-title"><div><h2 id="upload-title">Add your files</h2><p>HTML, PDF, TXT, Markdown, images and other files. Originals stay intact. Up to 25 MB per file.</p><p className="resource-muted">Updated material is a new upload; earlier originals remain available. PDF page images are prepared here for visual reading.</p></div><label className="resource-upload-button">Choose files<input type="file" multiple disabled={busy || !ready} onChange={e => { const queue = Array.from(e.target.files ?? []).map(file => ({ file, filename: file.name, operationId: "upload-" + crypto.randomUUID(), state: "Waiting" })); setJobs(queue); void run(queue); e.target.value = ""; }} /></label></section>
     {jobs.length > 0 && <section aria-label="Upload progress"><ul className="resource-jobs">{jobs.map(job => <li key={job.operationId}><strong>{job.filename}</strong><span role="status">{job.state}</span></li>)}</ul>{!busy && jobs.some(j => j.state !== "Saved") && <button onClick={() => void run(jobs)}>Retry unfinished uploads</button>}</section>}
     <p role="alert" className="resource-error">{error}</p><p role="status">{notice}</p>
-    <div className="resource-columns"><aside><form onSubmit={e => { e.preventDefault(); load(0, query).catch(e => setError(e.message)); }}><label htmlFor="resource-search">Find in your library</label><div className="resource-actions"><input id="resource-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Title or text phrase" /><button>Search</button></div></form>
+    <nav className="resource-mobile-panes" aria-label="Library reading panes"><button aria-pressed={mobilePane === "index"} onClick={() => setMobilePane("index")}>Files</button><button aria-pressed={mobilePane === "reader"} onClick={() => setMobilePane("reader")}>Reader</button></nav><div className={`resource-columns mobile-${mobilePane}`}><aside><form onSubmit={e => { e.preventDefault(); load(0, query).catch(e => setError(e.message)); }}><label htmlFor="resource-search">Find in your library</label><div className="resource-actions"><input id="resource-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Title or text phrase" /><button>Search</button></div></form>
       <ul className="resource-list">{items.map(item => <li key={item.resourceId}><button aria-pressed={reading?.resource.resourceId === item.resourceId} onClick={() => void open(item)}><strong>{item.title}</strong><small>{Math.ceil(item.sizeBytes / 1024)} KB · {item.chunkCount ? `${item.chunkCount} reading fragments` : "Original file"}</small></button></li>)}</ul>
       {!items.length && <p className="resource-muted">Your saved files will appear here.</p>}{nextOffset !== null && <button onClick={() => load(nextOffset, query).catch(e => setError(e.message))}>Load more</button>}</aside>
       <article aria-label="Resource reader">{reading ? <><p className="resource-eyebrow">ORIGINAL PRESERVED</p><h2>{reading.resource.title}</h2><div className="resource-actions"><a className="resource-button" href={reading.resource.originalUrl} download>Download original</a><button onClick={async () => { const text = resourceTeachingPrompt(reading.resource.resourceId, reading.resource.title); setPrompt(text); try { await navigator.clipboard.writeText(text); setNotice("ChatGPT request copied."); } catch { setNotice("Copy the request below into connected ChatGPT."); } }}>Use in ChatGPT</button>{reading.resource.filename.toLowerCase().endsWith(".pdf") && <button disabled={busy} onClick={() => void prepareSelected()}>Prepare PDF page images</button>}</div>
@@ -111,5 +114,5 @@ export default function ResourceLibrary() {
         {reading.fragment ? <><div className="resource-actions resource-paging"><span>{reading.fragment.location} · fragment {reading.fragment.ordinal + 1} of {reading.resource.chunkCount}</span><button disabled={reading.fragment.ordinal === 0} onClick={() => void open(reading.resource, reading.fragment!.ordinal - 1)}>Previous</button><button disabled={reading.nextChunk === null} onClick={() => void open(reading.resource, reading.nextChunk!)}>Next</button></div><pre className="resource-text">{reading.fragment.text}</pre></> : <p>The original is saved. For images, ask ChatGPT to inspect the pixels with its library tool. Other formats may need a separate reading copy.</p>}
         <details><summary>Original identity</summary><code className="resource-hash">{reading.resource.sourceSha256}</code><small>{reading.resource.resourceId}</small></details>
       </> : <div className="resource-empty"><h2>Your material, ready to return to.</h2><p>Choose a file to read its complete text in fragments, download the unchanged original, or use it in ChatGPT.</p><p>ChatGPT can also save attached files to this same private library through the Interview Arc connection.</p><Link href="/?view=learn&learn=materials">Published learning materials →</Link></div>}</article></div>
-  </main>;
+  </section>;
 }

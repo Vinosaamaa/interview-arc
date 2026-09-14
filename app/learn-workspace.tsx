@@ -29,13 +29,13 @@ import {
   type LearningSessionProjection,
 } from "./learn-workspace-model";
 
-import HeroQuote from "./hero-quote";
-import WorkspaceHeroMetrics from "./workspace-hero-metrics";
+import LearnPageHero from "./learn-page-hero";
+import { subscribeToLiveUpdates } from "./live-event-policy";
 import LearnCoursePrompt from "./learn-course-prompt";
 
 import "./learn-workspace.css";
 
-type LearnDestination = Exclude<AllLearnDestination, "materials">;
+type LearnDestination = Exclude<AllLearnDestination, "materials" | "library">;
 type MobileCoursePane = "path" | "lesson";
 type MobileTodayPane = "thread" | "session";
 type CourseFocus = { courseId: string; lessonId: string; section: CourseSection };
@@ -164,13 +164,6 @@ function syncCourseFocusToUrl(focus: CourseFocus, destination: LearnDestination)
   }
 }
 
-function LearnAnimalSketch({ destination }: { destination: LearnDestination }) {
-  if (destination === "courses") return <svg viewBox="0 0 260 210" role="img" aria-label="An owl watching over an evolving syllabus"><path d="M72 72c8-34 31-51 58-37 28-14 51 3 59 37 13 53-8 99-59 111-51-12-72-58-58-111Z" /><path d="M86 54 69 30l38 16M174 54l17-24-38 16M94 89a22 22 0 1 0 44 0 22 22 0 0 0-44 0Zm28 0h16m28 0a22 22 0 1 1-44 0M122 113l8 11 8-11M106 147c15 8 33 8 49 0M92 181h76" /></svg>;
-  if (destination === "history") return <svg viewBox="0 0 260 210" role="img" aria-label="An elephant carrying a private learning history"><path d="M66 83c7-36 35-56 75-50 36 5 59 31 57 68-1 28-16 48-40 58H91c-30-13-38-44-25-76Z" /><path d="M189 78c23 10 31 31 23 62-5 21-18 30-39 27M173 167c15 8 27 6 36-7M88 154v33M154 158v29M70 82 48 64l8 38M112 71a5 5 0 1 0 0 .1M137 32c-8 21-6 39 8 55" /></svg>;
-  if (destination === "analytics") return <svg viewBox="0 0 260 210" role="img" aria-label="A honeybee tracing measured learning signals"><path d="M86 105c0-31 20-52 48-52s48 21 48 52-20 51-48 51-48-20-48-51Z" /><path d="M103 66c-24-25-51-23-62 5 17 21 38 27 63 18M164 67c23-26 50-24 62 4-17 21-39 27-64 18M97 86h73M88 109h92M100 135h69M134 53V29M122 29l12-13 12 13M87 154l-24 23M180 153l23 24" /></svg>;
-  return <svg viewBox="0 0 260 210" role="img" aria-label="A fox picking up the current learning thread"><path d="M68 88 52 35l48 25c18-13 42-13 60 0l48-25-16 53c12 20 10 45-7 65-15 18-34 27-55 27s-40-9-55-27c-17-20-19-45-7-65Z" /><path d="M83 65 63 49l12 35M177 65l20-16-12 35M94 108a6 6 0 1 0 0 .1M166 108a6 6 0 1 0 0 .1M113 132c11 8 23 8 34 0M130 128v17M94 147c24 12 48 12 72 0" /></svg>;
-}
-
 function LearnHero({ destination, payload }: { destination: LearnDestination; payload: LearnPayload | null }) {
   const copy = LEARN_DESTINATION_COPY[destination];
   const facts = payload?.workspace.facts ?? {};
@@ -185,19 +178,7 @@ function LearnHero({ destination, payload }: { destination: LearnDestination; pa
       { label: "Lessons complete", value: factualCount(facts.completedLessonCount) },
       { label: "Checkpoint evidence", value: factualCount(facts.demonstratedCheckpointCount) },
     ];
-  return <header key={destination} className={`learn-frame learn-hero learn-hero-${destination}`}>
-    <div className="learn-hero-copy">
-      <span className="learn-eyebrow">{copy.eyebrow}</span>
-      <h1>{copy.title}</h1>
-      <HeroQuote className="learn-hero-quote">{copy.quote}</HeroQuote>
-      <p className="learn-hero-lede">{copy.description}</p>
-      <a href="/resources">Study resource library</a>
-    </div>
-    <div className="learn-animal-sketch"><LearnAnimalSketch destination={destination} /></div>
-    <span className="learn-hero-pulse" aria-hidden="true" />
-    <span className="learn-hero-light-band" aria-hidden="true" />
-    <WorkspaceHeroMetrics className="learn-hero-metrics" metrics={metrics} />
-  </header>;
+  return <LearnPageHero destination={destination} {...copy} metrics={metrics}/>;
 }
 
 function EmptyLearn({ destination }: { destination: LearnDestination }) {
@@ -661,12 +642,17 @@ function TodayWorkbench({
       </div>
     </div>;
   }
-  const snapshot = todayQuickStudy?.current ?? located?.snapshot;
-  const lessonTitle = located?.lesson.title ?? todayQuickStudy?.lesson.title ?? session.session.lessonId;
+  const currentSnapshot = todayQuickStudy?.current ?? located?.snapshot;
+  const snapshot = session.lesson ?? (currentSnapshot?.revision === session.session.lessonRevision ? currentSnapshot : null);
+  const lessonTitle = snapshot?.title ?? located?.lesson.title ?? todayQuickStudy?.lesson.title ?? session.session.lessonId;
   const checkpoints = snapshot?.checkpoints.filter((item) => item.required) ?? [];
   const demonstrated = checkpoints.filter((checkpoint) => payload.evidence.checkpointStates.some((state) => state.lessonId === snapshot?.lessonId && state.checkpointId === checkpoint.checkpointId && state.status === "demonstrated")).length;
+  const recent = learningHistory(payload)[0];
+  const recentCourse = recent?.session.courseId ? selectLearningCourse(payload, recent.session.courseId) : null;
+  const recentLesson = recent && recentCourse ? locateCourseLesson(payload, recentCourse, recent.session.lessonId) : null;
   const sessionLabel = session.session.state === "planned" ? "UP NEXT" : session.session.state === "paused" ? "PAUSED" : "IN PLAY";
   return <div className="learn-today-workbench learn-frame">
+    {recent && recent.session.updatedAt > session.session.updatedAt && <aside className="learn-recent-session"><div><span className="learn-eyebrow">RECENTLY COMPLETED</span><strong>{recent.lesson?.title ?? recentLesson?.lesson.title ?? recent.session.lessonId}</strong><p>{formatDate(recent.session.completedAt)} · {formatDuration(recent.session.accumulatedSeconds)}</p></div><button onClick={() => onOpenCourses({courseId:recent.session.courseId ?? undefined, lessonId:recent.session.lessonId, quickStudyId:recent.session.scopeType === "quick_study" ? recent.session.lessonId : undefined, section:"lessons"})}>Read lesson</button></aside>}
     <SessionInstrument
       session={session}
       now={now}
@@ -750,23 +736,45 @@ export default function LearnWorkspace({
   const [appliedFocusSignature, setAppliedFocusSignature] = useState("");
   const operationIds = useRef(new Map<string, string>());
 
+  const refreshRequest = useRef(0);
   const refresh = useCallback(async () => {
+    const request = ++refreshRequest.current;
     try {
       const response = await fetch("/api/learn", { cache: "no-store", headers: { accept: "application/json" } });
       const body = await response.json() as LearnPayload | { error?: string };
       if (!response.ok || !("workspace" in body)) throw new Error("error" in body && body.error ? body.error : "Learn could not be loaded.");
+      if (request !== refreshRequest.current) return;
       setPayload(body);
       setError("");
+      return true;
     } catch (loadError) {
+      if (request !== refreshRequest.current) return;
       setError(loadError instanceof Error ? loadError.message : "Learn could not be loaded.");
+      return false;
     } finally {
-      setLoading(false);
+      if (request === refreshRequest.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void refresh(), 0);
-    return () => window.clearTimeout(initialLoad);
+    const wake = () => { if (document.visibilityState === "visible") void refresh(); };
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const reconcile = async () => { if (await refresh() === false) throw new Error("Learn refresh failed"); };
+    const unsubscribe = subscribeToLiveUpdates({
+      url: `${protocol}//${window.location.host}/api/live-events`,
+      onUpdate: (update) => update.scope === "learning" ? reconcile() : undefined,
+      onFallback: reconcile,
+    });
+    window.addEventListener("focus", wake);
+    document.addEventListener("visibilitychange", wake);
+    return () => {
+      window.clearTimeout(initialLoad);
+      refreshRequest.current += 1;
+      unsubscribe();
+      window.removeEventListener("focus", wake);
+      document.removeEventListener("visibilitychange", wake);
+    };
   }, [refresh]);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
