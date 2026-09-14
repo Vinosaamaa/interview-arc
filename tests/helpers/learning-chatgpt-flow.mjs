@@ -33,7 +33,7 @@ export async function verifyLearningChatgptFlow(client) {
   await call("attach_learning_artifact", { operationId: "learning-chat-artifact", artifactId: "learning-chat-note", authorization: "learning_specialist", lessonId, sessionId, homeworkId: "lookup-note", kind: "written", label: "Synthetic answer", mediaType: "text/plain", content: turns[1].body });
   await call("set_learning_homework_state", { operationId: "learning-chat-homework", authorization: "explicit_user_instruction", lessonId, homeworkId: "lookup-note", expectedRevision: 1, state: "completed" });
   const before = (await call("query_learning_sessions", { sessionId })).sessions[0];
-  assert.deepEqual(before.turns.map(t => t.body), turns.map(t => t.body));
+  assert.deepEqual(before.turns.map(({turnId, sequence, speaker, source, body, occurredAt}) => ({turnId, sequence, speaker, source, body, occurredAt})), turns);
   const finished = await call("finish_learning_session", { operationId: "learning-chat-finish", authorization: "explicit_user_instruction", sessionId, expectedRevision: before.session.revision, expectedTranscriptRevision: before.session.transcriptRevision, finalization: { recap: "The synthetic learner explained names and addresses.", recommendedNextAction: "Review lookup failures next.", checkpointResults: [{ checkpointId: "distinguish", status: "demonstrated", rationale: "The exact learner turn explains readable identity and network address.", evidence: [{ kind: "transcript_turn", turnId: turns[1].turnId }] }] } });
   assert.equal(finished.state, "completed");
   const evidence = await call("query_learning_evidence", { lessonId });

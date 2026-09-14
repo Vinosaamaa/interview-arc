@@ -123,7 +123,7 @@ function MaterialReader({ material: m }: {
     const isImage = source && /\.(png|jpe?g|gif|webp)$/i.test(source.resource.filename), isHtml = source && /\.html?$/i.test(source.resource.filename), isPdf = source && /\.pdf$/i.test(source.resource.filename);
     return <><div className="material-meta"><span>{m.kind === "youtube" ? "YOUTUBE · VIDEO NOTES" : m.kind === "article" ? "ARTICLE NOTES" : "STUDY NOTES"}</span><span>Private</span></div><h2 className="material-title">{m.title}</h2>
   {m.sourceUrl && <a className="material-source-link" href={m.sourceUrl} target="_blank" rel="noreferrer">Open original source ↗</a>}
-  {(m.coverage === "partial" || m.limitations.length > 0) && <aside className="material-limitations"><strong>{m.coverage === "partial" ? "Partial source coverage" : "Reading notes"}</strong><ul>{m.limitations.map((x, i) => <li key={i}>{x}</li>)}</ul></aside>}
+  {(m.coverage === "partial" || m.limitations.length > 0) && <details className="material-limitations" open={m.coverage === "partial"}><summary>{m.coverage === "partial" ? "Partial source coverage" : "Source notes"}</summary><ul>{m.limitations.map((x, i) => <li key={i}>{x}</li>)}</ul></details>}
   <section className="material-overview"><h3>Overview</h3><p>{m.summary.overview}</p></section>
   <nav className="material-outline" aria-label="Topics in this material"><h3>What it covers</h3><ol>{m.summary.sections.map((s, i) => <li key={i}><a href={`#material-topic-${i}`}>{s.heading}</a></li>)}</ol></nav>
   {m.summary.sections.map((s, i) => <section className="material-topic" id={`material-topic-${i}`} key={i}><p className="material-location">{String(i + 1).padStart(2, "0")} · {s.sourceLocation}</p><h3>{s.heading}</h3><p>{s.body}</p></section>)}
