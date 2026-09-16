@@ -230,6 +230,17 @@ body:has(.review-queue-workspace, .banks-page.bounded-list) { overflow: visible;
   .page-content:has(> .review-queue-workspace, > .banks-page.bounded-list) { padding-bottom: 140px; }
 }
 
+/* Compact readers leave room for the bottom dock, using the same 50px bar. */
+@media (min-width: 601px) and (max-width: 1100px) {
+  .app-shell .reader-workspace,
+  .app-shell .library-page.has-open-entry .past-master-detail,
+  .app-shell .banks-page.has-open-solution .bank-master-detail {
+    top: 66px;
+    bottom: calc(86px + env(safe-area-inset-bottom));
+    height: auto;
+  }
+}
+
 /* Topic labels adapt to the pane width, including desktop with its sidebar. */
 .topic-ribbon { container-type: inline-size; }
 @container (max-width: 1100px) {

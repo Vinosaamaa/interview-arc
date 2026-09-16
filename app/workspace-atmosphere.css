@@ -453,8 +453,8 @@
 
 /* Past and Banks fill as opaque paper. Do not leave a grey canvas gutter
    around the list, search, or calendar. */
-.app-shell.active-view-library :is(.library-page, .past-master-detail, .past-master-pane, .past-entry-pane, .past-control-deck, .dated-log, .log-layout, .log-day, .log-calendar, .quiet-empty),
-.app-shell.active-view-banks :is(.banks-page, .bank-master-detail, .bank-master-pane, .bank-solution-pane, .bank-control-deck, .topic-ribbon, .problem-bank-list, .quiet-empty) {
+.app-shell.active-view-library :is(.library-page, .past-master-detail:not(.reader-workspace), .past-master-pane, .past-entry-pane, .past-control-deck, .dated-log, .log-layout, .log-day, .log-calendar, .quiet-empty),
+.app-shell.active-view-banks :is(.banks-page, .bank-master-detail:not(.reader-workspace), .bank-master-pane, .bank-solution-pane, .bank-control-deck, .topic-ribbon, .problem-bank-list, .quiet-empty) {
   background: var(--workspace-paper);
 }
 .app-shell.active-view-library .main-column,
