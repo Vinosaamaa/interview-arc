@@ -1415,9 +1415,10 @@ test("reader backdrop meets the compact bar and paper belongs to rounded panes",
   assert.equal(reader?.top, "66px");
   assert.equal(reader?.height, "calc(100dvh - 82px)");
   assert.equal(cssRules(rules, ".banks-page.has-open-solution::before")[0]?.declarations.inset, "50px 0 0 var(--sidebar-size)");
-  const atmosphere = await load("../app/workspace-atmosphere.css");
-  assert.ok(atmosphere.includes(".past-master-detail:not(.reader-workspace)"));
-  assert.ok(atmosphere.includes(".bank-master-detail:not(.reader-workspace)"));
+  const atmosphere = parseCss(await load("../app/workspace-atmosphere.css"));
+  for (const selector of [".past-master-detail:not(.reader-workspace)", ".bank-master-detail:not(.reader-workspace)"]) {
+    assert.equal(cssRules(atmosphere, selector)[0]?.declarations.background, "var(--workspace-paper)");
+  }
 });
 
 test("every workspace keeps timer, export, and connect in one tools menu", async () => {
