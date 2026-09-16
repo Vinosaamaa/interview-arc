@@ -1894,12 +1894,12 @@ body:has(.reader-workspace) .ambient-rain-drop span { animation-play-state: paus
   --reader-pane-width: 1200px;
   --reader-workspace-gap: 12px;
   width: min(var(--reader-pane-width), calc(100vw - var(--sidebar-size) - 32px));
-  height: calc(100vh - 120px);
+  height: calc(100dvh - 82px);
   grid-template-columns: 0 minmax(0, 1fr);
   gap: 0;
   align-items: stretch;
   position: fixed;
-  top: 96px;
+  top: 66px;
   left: calc(var(--sidebar-size) + (100vw - var(--sidebar-size)) / 2);
   transform: translateX(-50%);
   z-index: 26;
@@ -2091,9 +2091,9 @@ body:has(.reader-workspace) .ambient-rain-drop span { animation-play-state: paus
 .reader-workspace {
   --reader-pane-width: 1200px;
   width: min(var(--reader-pane-width), calc(100vw - var(--sidebar-size) - 32px));
-  height: calc(100dvh - 104px);
+  height: calc(100dvh - 82px);
   position: fixed;
-  top: 88px;
+  top: 66px;
   left: calc(var(--sidebar-size) + (100vw - var(--sidebar-size)) / 2);
   transform: translateX(-50%);
   z-index: 26;
@@ -2109,7 +2109,7 @@ body:has(.reader-workspace) .ambient-rain-drop span { animation-play-state: paus
 .review-queue-workspace.has-open-reader::before {
   content: "";
   position: fixed;
-  inset: 72px 0 0 var(--sidebar-size);
+  inset: 50px 0 0 var(--sidebar-size);
   z-index: 25;
   background: var(--canvas);
 }
@@ -2121,7 +2121,7 @@ body:has(.reader-workspace) .ambient-rain-drop span { animation-play-state: paus
 .loops-reader-workspace.has-open-reader::before {
   content: "";
   position: fixed;
-  inset: 72px 0 0 var(--sidebar-size);
+  inset: 50px 0 0 var(--sidebar-size);
   z-index: 25;
   background: var(--canvas);
 }
@@ -2288,7 +2288,7 @@ body:has(.review-queue-workspace) { padding-bottom: 0; overflow: hidden; }
   .reader-workspace {
     width: calc(100vw - 32px);
     height: auto;
-    inset: 156px auto 16px 50%;
+    inset: 66px auto 86px 50%;
   }
 }
 

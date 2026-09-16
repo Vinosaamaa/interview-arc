@@ -1409,6 +1409,18 @@ test("an open reader owns an opaque paint layer and suspends ambient petals", as
   assert.equal(cssRules(rules, ".reader-outline .toc-parent")[0]?.declarations["font-weight"], "inherit");
 });
 
+test("reader backdrop meets the compact bar and paper belongs to rounded panes", async () => {
+  const rules = parseCss(await load("../app/interview-arc-v2.css"));
+  const reader = cssRules(rules, ".reader-workspace")[0]?.declarations;
+  assert.equal(reader?.top, "66px");
+  assert.equal(reader?.height, "calc(100dvh - 82px)");
+  assert.equal(cssRules(rules, ".banks-page.has-open-solution::before")[0]?.declarations.inset, "50px 0 0 var(--sidebar-size)");
+  const atmosphere = parseCss(await load("../app/workspace-atmosphere.css"));
+  for (const selector of [".past-master-detail:not(.reader-workspace)", ".bank-master-detail:not(.reader-workspace)"]) {
+    assert.equal(cssRules(atmosphere, selector)[0]?.declarations.background, "var(--workspace-paper)");
+  }
+});
+
 test("every workspace keeps timer, export, and connect in one tools menu", async () => {
   const source = await load("../app/home-client.tsx");
   assert.match(source, /<details className=\{`topbar-tools/);
